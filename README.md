@@ -1,4 +1,4 @@
 ukaz
 ====
 
-Graph widget in pure Tcl/Tk
+Ukaz is a graph widget written in pure Tcl/Tk. 
