@@ -1,5 +1,5 @@
 package require snit
-package require uevent
+package require Tk 8.6
 package provide ukaz 2.0a1
 
 namespace eval ukaz {
@@ -787,7 +787,7 @@ namespace eval ukaz {
 
 			parsearg {using u} {} 
 			parsearg {with w} points
-			parsearg {color c} auto
+			parsearg {color lc} auto
 			parsearg {pointtype pt} circles
 			parsearg {pointsize ps} 1.0
 			parsearg {linewidth lw} 1.0
@@ -853,6 +853,23 @@ namespace eval ukaz {
 			dict unset linedata $id
 			set zstack [lremove $zstack $id]
 			$self RedrawRequest
+		}
+		
+		method {set log} {{what xy} {how on}} {
+			if {![string is boolean -strict $how]} { 
+				return -code error "Expected boolean value instead of $what"
+			}
+			switch $what {
+				x { $self configure -logx $how }
+				y { $self configure -logy $how }
+				xy {
+					$self configure -logx $how
+					$self configure -logy $how
+				}
+				default { 
+					return -code error "Unknown axis for log setting $what"
+				}
+			}
 		}
 
 		method getdata {id} {
