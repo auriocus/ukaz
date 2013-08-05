@@ -1382,6 +1382,7 @@ namespace eval ukaz {
 			$hull delete $selfns
 			set pointdata {}
 			set linedata {}
+			set zstack {}
 			$self RedrawRequest
 		}
 
