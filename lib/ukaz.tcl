@@ -406,11 +406,15 @@ namespace eval ukaz {
 		# for the tics position, if not requested otherwise
 		lassign $tics ticrequest spec
 		switch $ticrequest {
+			off {
+				return [list {} $min $max]
+			}
+
 			list {
 				# take the tics as they are
 				# list must be text, number,...
 				# don't widen
-				return [list [lindex $ticrequest 1] $min $max]
+				return [list $spec $min $max]
 			}
 
 			every {
@@ -505,7 +509,7 @@ namespace eval ukaz {
 		# if we are here, place marks at regular intervals
 		# at integer multiples of ticbase
 		# if we should widen, update min & max
-		if {[dict get $widen min]} {
+		if {[dict get $widen min] && !$log} {
 			set start [expr {int(floor(double($min)/double($ticbase)))}]
 			set min [expr {$ticbase*$start}]
 		} else {
@@ -522,6 +526,7 @@ namespace eval ukaz {
 		set ticlist {}
 		for {set i $start} {$i<=$stop} {incr i} {
 			set v [expr {$i*$ticbase}]
+			# if {$log && $v<=0} { continue }
 			lappend ticlist [format $format $v] $v
 		}
 		return [list $ticlist $min $max]		
@@ -773,7 +778,8 @@ namespace eval ukaz {
 			defer [mymethod Redraw]
 			return {}
 		}
-
+		
+		#################### gnuplot style interface functions###########
 		method plot {data args} {
 			# main plot command
 			# simulate gnuplot
@@ -870,6 +876,109 @@ namespace eval ukaz {
 					return -code error "Unknown axis for log setting $what"
 				}
 			}
+		}
+
+		# helper function to parse gnuplot-style ranges
+		proc rangeparse {arglist} {
+			if {[llength $arglist]==1} {
+				# single string in gnuplot form - decompose at :
+				# after removal of [] (potentially)
+				set rangestring [lindex $arglist 0] ;# unpack
+				
+				if {[string trim $rangestring]=="auto"} { return [list * *] }
+
+				set arglist [split [string trim $rangestring {[]} ] :]
+			}
+		
+			if {[llength $arglist]==2} {
+				# argument is a Tcl list min max
+				lassign $arglist min max
+				
+				set min [string trim $min]
+				set max [string trim $max]
+				
+				if {$min == ""} { set min * }
+				if {$max == ""} { set max * }
+				
+				if {(!isfinite($min) && $min!="*") || (!isfinite($max) && $max !="*")} {
+					return -code error -level 2 "Range limits must be floats or *; got $min:$max"
+				}
+			} else {
+				return -code error -level 2 "Range must consist of two limits min:max"
+			}
+
+			list $min $max
+		}	
+		
+		method {set xrange} {args} {
+			set options(-xrange) [rangeparse $args]
+			$self RedrawRequest
+		}
+		
+		method {set yrange} {args} {
+			set options(-yrange) [rangeparse $args]
+			$self RedrawRequest
+		}
+
+		method {set grid} {{how on}} {
+			if {$how} {
+				set options(-grid) on
+			} else {
+				set options(-grid) off
+			}
+			$self RedrawRequest
+		}
+
+		proc parsetics {arglist} {
+			if {[llength $arglist]==1} {
+				# unpack
+				set val [lindex $arglist 0]
+				set sval [string trim $val]
+				# either auto or double value
+				if {$sval=="auto" || $sval == "off"} {
+					return $sval
+				} else {
+					# try to parse as float
+					if {isfinite($val) && $val > 0} {
+						return [list every $val]
+					} else {
+						return -code error -level 2 "Tics must be float or \"auto\" or \"off\""
+					}
+				}
+			}
+
+			if {[llength $arglist]%2==1} {
+				return -code error -level 2 "Tic list must be label pos ?label pos ...?"
+			}
+			
+			# check for float value at every odd pos
+			foreach {text pos} $arglist {
+				if {!isfinite($pos)} {
+					return -code error -level 2 "All tics must be at finite position: \"$text\", $pos"
+				}
+			}
+
+			list list $arglist
+		}
+
+		method {set xtics} {args} {
+			set options(-xtics) [parsetics $args]
+			$self RedrawRequest
+		}
+
+		method {set ytics} {args} {
+			set options(-ytics) [parsetics $args]
+			$self RedrawRequest
+		}
+
+		method {set xlabel} {text} {
+			set options(-xlabel) $text
+			$self RedrawRequest
+		}
+
+		method {set ylabel} {text} {
+			set options(-ylabel) $text
+			$self RedrawRequest
 		}
 
 		method getdata {id} {
