@@ -877,6 +877,11 @@ namespace eval ukaz {
 				}
 			}
 		}
+		
+		method {unset log} {{what {}}} {
+			$self set log $what off
+		}
+
 
 		# helper function to parse gnuplot-style ranges
 		proc rangeparse {arglist} {
@@ -920,6 +925,14 @@ namespace eval ukaz {
 			$self RedrawRequest
 		}
 
+		method {set auto x} {} {
+			$self set xrange *:*
+		}
+
+		method {set auto y} {} {
+			$self set yrange *:*
+		}
+
 		method {set grid} {{how on}} {
 			if {$how} {
 				set options(-grid) on
@@ -927,6 +940,10 @@ namespace eval ukaz {
 				set options(-grid) off
 			}
 			$self RedrawRequest
+		}
+
+		method {unset grid} {} {
+			$self set grid off
 		}
 
 		proc parsetics {arglist} {
