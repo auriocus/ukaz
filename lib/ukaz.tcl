@@ -1514,7 +1514,10 @@ namespace eval ukaz {
 		}
 
 		method motionevent {x y} {
-			#event generate $can <<MotionEvent>> -data [$self pixelToCoords $x $y]
+			# inverse transform this point
+			set xgraph [$self pixToX $x]
+			set ygraph [$self pixToY $y]
+			event generate $win <<MotionEvent>> -data [list $xgraph $ygraph]
 		}
 		
 		method saveAsPDF {fn} {
