@@ -12,8 +12,24 @@ grid .l -sticky nsew
 grid columnconfigure . 0 -weight 1
 grid rowconfigure . 0 -weight 1
 
-bind .g <<MotionEvent>> { set status "[join %d ,]" }
-bind .g <<Click>> { puts "Clicked on %x,%y at [join %d ,]" }
+bind .g <<MotionEvent>> { pointerinfo {*}%d}
+bind .g <<Click>> { click %x %y {*}%d }
+
+proc click {x y xtr ytr} {
+	# output the position of the click and transformed coords
+	puts "Click at $x, $y (graph [format %.5g $xtr], [format %.5g $ytr])"
+	# look for data point nearby
+	lassign [.g pickpoint $x $y] id dpnr xd yd
+	if {$id != {}} {
+		puts "Data point $dpnr, set $id, ([format %.5g $xd], [format %.5g $yd])"
+	} else {
+		puts "No data point nearby"
+	}
+}
+
+proc pointerinfo {x y} {
+	set ::status "[format %.5g $x], [format %.5g $y]"
+}
 
 .g plot $datafile using 1:2 with points pt filled-triangles color blue ps 1.0
 .g plot $datafile using {1:(2*$2)} with lines color red lw 3

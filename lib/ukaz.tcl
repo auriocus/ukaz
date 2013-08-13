@@ -220,13 +220,17 @@ namespace eval ukaz {
 			set ymin [dict get $range ymin]
 			set ymax [dict get $range ymax]
 			set result {}
+			set clipinfo {}
+			set clipid 0
 			foreach {x y} $cdata {
 				if {$x!=$x || $y!=$y || $x<$xmin || $x>$xmax || $y<$ymin || $y>$ymax} {
+					dict incr clipinfo $clipid
 					continue
 				}
 				lappend result $x $y
+				incr clipid
 			}
-			return $result
+			list $result $clipinfo
 		}
 	}
 
@@ -797,6 +801,7 @@ namespace eval ukaz {
 			parsearg {pointtype pt} circles
 			parsearg {pointsize ps} 1.0
 			parsearg {linewidth lw} 1.0
+			parsearg {dash} ""
 		
 			#puts "Plot config: $using $with $color $pointtype $pointsize $linewidth"
 			if {$using != {}} {
@@ -827,6 +832,7 @@ namespace eval ukaz {
 					dict set linedata $id datarange $datarange
 					dict set linedata $id color $color
 					dict set linedata $id linewidth $linewidth
+					dict set linedata $id dash $dash
 				}
 
 				lp -
@@ -841,6 +847,7 @@ namespace eval ukaz {
 					dict set linedata $id datarange $datarange
 					dict set linedata $id color $color
 					dict set linedata $id linewidth $linewidth
+					dict set linedata $id dash $dash
 				}
 
 				default {
@@ -998,11 +1005,11 @@ namespace eval ukaz {
 			$self RedrawRequest
 		}
 
-		method getdata {id} {
+		method getdata {id args} {
 			if {[dict exists $pointdata $id]} {
-				return [dict get $pointdata $id]
+				return [dict get $pointdata $id {*}$args]
 			} else {
-				return [dict get $linedata $id]
+				return [dict get $linedata $id {*}$args]
 			}
 		}
 
@@ -1271,15 +1278,26 @@ namespace eval ukaz {
 
 		method drawpoints {id} {
 			set data [dict get $pointdata $id data]
-			set d [$self graph2pix [geometry::pointclip $data $displayrange]]
+			lassign [geometry::pointclip $data $displayrange] clipdata clipinfo
+			# store away the clipped & transformed data
+			# together with the info of the clipping
+			# needed for picking points
+			dict set pointdata $id clipinfo $clipinfo
+			set transdata [$self graph2pix $clipdata]
+			dict set pointdata $id transdata $transdata
+
 			set shapeproc shape-[dict get $pointdata $id pointtype]
-			$shapeproc $hull $d [dict get $pointdata $id color] [dict get $pointdata $id pointsize]	$selfns
+			$shapeproc $hull $transdata \
+				[dict get $pointdata $id color] \
+				[dict get $pointdata $id pointsize]	\
+				$selfns
 		}
 	
 		method drawlines {id} {
 			set data [dict get $linedata $id data]
 			set color [dict get $linedata $id color]
 			set width [dict get $linedata $id linewidth]
+			set dash [dict get $linedata $id dash]
 		
 			set piece {}
 			set pieces {}
@@ -1312,7 +1330,7 @@ namespace eval ukaz {
 							error "polyline did wrong, look in console"
 						}
 						lappend ids [$hull create line $coord \
-							-fill $color -width $width -tag $selfns]
+							-fill $color -width $width -tag $selfns -dash $dash]
 					}
 				}
 			}
@@ -1453,6 +1471,7 @@ namespace eval ukaz {
 			}
 		}
 
+		#### Methods for dragging rectangles (for zooming) #####
 		method {drag start} {x y} {
 			# try to see if this is our object
 			set cid [$hull find withtag current]
@@ -1520,6 +1539,50 @@ namespace eval ukaz {
 			event generate $win <<MotionEvent>> -data [list $xgraph $ygraph]
 		}
 		
+		method pickpoint {x y {maxdist 5}} {
+			# identify point in dataset given by *screen coordinates* x,y
+			# maximum distance from center maxdist
+			# return the topmost datapoint nearer than maxdist
+			set maxdistsq [expr {$maxdist**2}]
+			foreach id [lreverse $zstack] {
+				if {[dict exists $pointdata $id transdata]} {
+					# the transformed data is only available after drawing
+					set transdata [dict get $pointdata $id transdata]
+					set clipinfo [dict get $pointdata $id clipinfo]
+					set mindistsq Inf
+					set nr 0
+					foreach {xp yp} $transdata {
+						set distsq [expr {($xp-$x)**2+($yp-$y)**2}]
+						if {$distsq<$mindistsq} {
+							set mindistsq $distsq
+							set minnr $nr
+						}
+						incr nr
+					}
+					
+					if {$mindistsq < $maxdistsq} {
+						# now compute the real datapointnr after clipping
+						set dpnr $minnr
+						foreach {clipnr cliplength} $clipinfo {
+							if {$clipnr <= $minnr} {
+								incr dpnr $cliplength
+							}
+						}
+						# get the original data
+						set data [dict get $pointdata $id data]
+						set xd [lindex $data [expr {$dpnr*2}]]
+						set yd [lindex $data [expr {$dpnr*2+1}]]
+
+						# short circuiting ensures the 1st, topmost point is returned 
+						return [list $id $dpnr $xd $yd]
+					}
+				}
+			}
+
+			return {}
+		}
+
+
 		method saveAsPDF {fn} {
 			package require pdf4tcl
 			set size [list [winfo width $hull] [winfo height $hull]]
