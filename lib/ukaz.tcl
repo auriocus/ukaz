@@ -1534,6 +1534,8 @@ namespace eval ukaz {
 			# objects. First send a Parent command to notify it
 			$c Parent $self $hull
 			lappend controls $c
+			# get notification if this thing is deleted
+			trace add command $c delete [mymethod controldeleted $c]
 			# during Redraw it'll get a Configure request
 			$self RedrawRequest
 		}
@@ -1541,7 +1543,17 @@ namespace eval ukaz {
 		method removecontrol {c} {
 			if {[lsearch -exact $controls $c]>=0} {
 				set controls [lremove $controls $c]
+				# remove the delete trace
+				trace remove command $c delete [mymethod controldeleted $c]
 				$c Parent {} {}
+			}
+		}
+
+		method controldeleted {c args} {
+			# the control was deleted from outside. Remove
+			# from our list without executing anything
+			if {[lsearch -exact $controls $c]>=0} {
+				set controls [lremove $controls $c]
 			}
 		}
 	}
@@ -1572,7 +1584,7 @@ namespace eval ukaz {
 		
 		destructor {
 			$self untrace
-			if { [winfo exists $canv] } { $canv delete $selfns }
+			if { [info commands $canv] != {} } { $canv delete $selfns }
 		}
 
 
@@ -1580,7 +1592,11 @@ namespace eval ukaz {
 			if {$parent != {}} {
 				# this control is now managed
 				if {$graph != {}} {
-					error "$self: Already managed by $graph"
+					return -code error "$self: Already managed by $graph"
+				}
+
+				if {[info commands $canvas] == {}} {
+					return -code error "$self: No drawing canvas: $canv"
 				}
 
 				set graph $parent
@@ -1600,10 +1616,11 @@ namespace eval ukaz {
 			
 			} else {
 				# this control was unmanaged. Remove our line
-				if {$canv != {} && [winfo exists $canv]} {
+				if {$canv != {} && [info commands $canv] != {}} {
 					$canv delete $selfns
 				}
 				set graph {}
+				set canv {}
 			}
 		}
 
@@ -1647,7 +1664,8 @@ namespace eval ukaz {
 			set loopescape true
 			upvar #0 $options(-variable) v
 			if {[info exists v]} {
-				$self gotoCoords $v $v
+				catch {$self gotoCoords $v $v}
+				# ignore any errors if the graph is incomplete
 			}
 		}
 
