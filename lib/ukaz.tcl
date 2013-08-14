@@ -353,47 +353,53 @@ namespace eval ukaz {
 	proc calcdatarange {data}  {
 		# compute min/max and corresponding log min/max
 		# for dataset
-		set xmin +Inf
-		set ymin +Inf
-		set logxmin +Inf
-		set logymin +Inf
-		set xmax -Inf
-		set ymax -Inf
-		set logxmax -Inf
-		set logymax -Inf
-
+		# unfortunately, four cases for log on/off must be considered
+		# indexes into list are logx & logy
+		set xmin {{+Inf +Inf} {+Inf +Inf}}
+		set xmax {{-Inf -Inf} {-Inf -Inf}}
+		set ymin {{+Inf +Inf} {+Inf +Inf}}
+		set ymax {{-Inf -Inf} {-Inf -Inf}}
 		foreach {x y} $data {
-			if {isfinite($x) && isfinite($y)} {
-				if {$x<$xmin} { set xmin $x}
-				if {$x>$xmax} { set xmax $x}
-				if {$y<$ymin} { set ymin $y}
-				if {$y>$ymax} { set ymax $y}
-			}
-			if {islogfinite($x) && islogfinite($y)} {
-				if {$x<$logxmin} { set logxmin $x }
-				if {$x>$logxmax} { set logxmax $x }
-				if {$y<$logymin} { set logymin $y }
-				if {$y>$logymax} { set logymax $y }
+			set xfin [list [expr {isfinite($x)}]  [expr {islogfinite($x)}]]
+			set yfin [list [expr {isfinite($y)}]  [expr {islogfinite($y)}]]
+			
+			foreach logx {0 1} {
+				foreach logy {0 1} {
+					if {[lindex $xfin $logx] && [lindex $yfin $logy]} {
+						if {$x<[lindex $xmin $logx $logy]} { lset xmin $logx $logy $x}
+						if {$x>[lindex $xmax $logx $logy]} { lset xmax $logx $logy $x}
+						if {$y<[lindex $ymin $logx $logy]} { lset ymin $logx $logy $y}
+						if {$y>[lindex $ymax $logx $logy]} { lset ymax $logx $logy $y}
+					}
+				}
 			}
 		}
-
-		dict create xmin $xmin xmax $xmax ymin $ymin ymax $ymax \
-			logxmin $logxmin logxmax $logxmax logymin $logymin logymax $logymax
+		dict create xmin $xmin ymin $ymin xmax $xmax ymax $ymax	
 	}
 
 	proc combine_range {range1 range2} {
 		if {$range1 == {}} { return $range2 }
 		if {$range2 == {}} { return $range1 }
 		set result {}
-		foreach key {xmin ymin logxmin logymin} {
-			set v1 [dict get $range1 $key]
-			set v2 [dict get $range2 $key]
-			dict set result $key [expr {min($v1,$v2)}]
+		foreach key {xmin ymin} {
+			set l1 [dict get $range1 $key]
+			set l2 [dict get $range2 $key]
+			foreach logx {0 1} lx1 $l1 lx2 $l2 {
+				foreach logy {0 1} v1 $lx1 v2 $lx2 {
+					lset l1 $logx $logy [expr {min($v1, $v2)}]
+				}
+			}
+			dict set result $key $l1
 		}
-		foreach key {xmax ymax logxmax logymax} {
-			set v1 [dict get $range1 $key]
-			set v2 [dict get $range2 $key]
-			dict set result $key [expr {max($v1,$v2)}]
+		foreach key {xmax ymax} {
+			set l1 [dict get $range1 $key]
+			set l2 [dict get $range2 $key]
+			foreach logx {0 1} lx1 $l1 lx2 $l2 {
+				foreach logy {0 1} v1 $lx1 v2 $lx2 {
+					lset l1 $logx $logy [expr {max($v1, $v2)}]
+				}
+			}
+			dict set result $key $l1
 		}
 		return $result
 	}
@@ -706,8 +712,8 @@ namespace eval ukaz {
 
 		option -xrange -default {* *} -configuremethod rangeset
 		option -yrange -default {* *} -configuremethod rangeset
-		option -logx -default false -configuremethod opset
-		option -logy -default false -configuremethod opset
+		option -logx -default 0 -configuremethod opset
+		option -logy -default 0 -configuremethod opset
 		option -grid -default false -configuremethod opset
 		option -xtics -default auto -configuremethod opset
 		option -ytics -default auto -configuremethod opset
@@ -869,9 +875,17 @@ namespace eval ukaz {
 		}
 		
 		method {set log} {{what xy} {how on}} {
+			# cast boolean how into canonical form 0,1
 			if {![string is boolean -strict $how]} { 
-				return -code error "Expected boolean value instead of $what"
+				return -code error "Expected boolean value instead of $how"
 			}
+			
+			if {$how} {
+				set how 1
+			} else {
+				set how 0
+			}
+
 			switch $what {
 				x { $self configure -logx $how }
 				y { $self configure -logy $how }
@@ -1022,20 +1036,12 @@ namespace eval ukaz {
 			dict for {id data} $linedata {
 				set datarange [combine_range $datarange [dict get $data datarange]]
 			}
-			if {$options(-logx)} {
-				set dxmin [dict get $datarange logxmin]
-				set dxmax [dict get $datarange logxmax]
-			} else {
-				set dxmin [dict get $datarange xmin]
-				set dxmax [dict get $datarange xmax]
-			}
-			if {$options(-logy)} {
-				set dymin [dict get $datarange logymin]
-				set dymax [dict get $datarange logymax]
-			} else {
-				set dymin [dict get $datarange ymin]
-				set dymax [dict get $datarange ymax]
-			}
+
+			set dxmin [lindex [dict get $datarange xmin] $options(-logx) $options(-logy)]
+			set dxmax [lindex [dict get $datarange xmax] $options(-logx) $options(-logy)]
+			set dymin [lindex [dict get $datarange ymin] $options(-logx) $options(-logy)]
+			set dymax [lindex [dict get $datarange ymax] $options(-logx) $options(-logy)]
+			
 			# now compute range from request & data
 			set xwiden {min false max false}
 			set ywiden {min false max false}
