@@ -37,7 +37,7 @@ for {set i 0} {$i<1000} {incr i} {
 	set x [expr {double($i)/100.0}]
 	lappend data $x [expr {sin($x*2*3.1415926535/3.2)*exp(-$x/5.0)}]
 }
-.g plot $data w p pt filled-squares
+.g plot $data w lp pt filled-squares
 
 ukaz::dragline d -variable v -orient horizontal
 .g addcontrol d

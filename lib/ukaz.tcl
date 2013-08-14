@@ -1276,7 +1276,8 @@ namespace eval ukaz {
 				# draw in correct order
 				if {[dict exists $pointdata $id]} {
 					$self drawpoints $id
-				} else {
+				} 
+				if {[dict exists $linedata $id]} {
 					$self drawlines $id
 				}
 			}
