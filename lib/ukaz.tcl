@@ -726,6 +726,7 @@ namespace eval ukaz {
 		option -samplelength -default 20
 		option -samplesize -default 1.0
 		option -key -default {top right}
+		option -keyspacing -default 1.0
 
 		option -enhanced -default false -configuremethod unimplemented
 		option -redraw -default 0 -readonly yes
@@ -1354,11 +1355,77 @@ namespace eval ukaz {
 	
 		method drawlegend {} {
 			# draw the titles and a sample
-			set lineheight [font metrics $axisfont -linespace]
+			set lineheight [expr {[font metrics $axisfont -linespace]*$options(-keyspacing)}]
+
 			# create list of all ids that have titles
 			# in correct zstack order
+			set titleids {}
 			foreach id $zstack {
+				if {[dict exists $plotdata $id title]} {
+					lappend titleids $id
+				}
 			}
+			# compute size needed for legend
+			
+			set dxmin [dict get $displaysize xmin]
+			set dymin [dict get $displaysize ymin]
+			set dxmax [dict get $displaysize xmax]
+			set dymax [dict get $displaysize ymax]
+			
+			set totalheight [expr {[llength $titleids]*$lineheight}]
+			set yoffset $lineheight ;# one line distance from border
+			set xoffset [expr {$options(-samplelength)/4}] ;# 1/4 length distance from border
+			
+			# y position of top sample
+			if {"top" in $options(-key)} {
+				set y0 [expr {$dymax+$yoffset}]
+			} else {
+				# bottom
+				set y0 [expr {$dymin-$totalheight}]
+			}
+
+			# x coordinates of line, sample and text anchor
+			if {"left" in $options(-key)} {
+				set x0 [expr {$dxmin+$xoffset}]
+				set x1 [expr {$dxmin+$xoffset+$options(-samplelength)}]
+				set sx [expr {($x0+$x1)/2}]
+				set tx [expr {$x1+$xoffset}]
+				set anchor w
+			} else {
+				# right
+				set x0 [expr {$dxmax-$xoffset-$options(-samplelength)}]
+				set x1 [expr {$dxmax-$xoffset}]
+				set sx [expr {($x0+$x1)/2}]
+				set tx [expr {$x0-$xoffset}]
+				set anchor e
+			}
+
+			# draw !
+			set ycur $y0
+			foreach id $titleids {
+				if {[dict exists $plotdata $id type points]} {
+					set shapeproc shape-[dict get $plotdata $id pointtype]
+					$shapeproc $hull [list $sx $ycur] \
+						[dict get $plotdata $id color] \
+						[dict get $plotdata $id pointsize]	\
+						$selfns
+				}
+
+				if {[dict exists $plotdata $id type lines]} {
+					$hull create line [list $x0 $ycur $x1 $ycur] \
+							-fill [dict get $plotdata $id color] \
+							-width [dict get $plotdata $id linewidth] \
+							-dash [dict get $plotdata $id dash] -tag $selfns
+				}
+				
+				set title [dict get $plotdata $id title]
+				$hull create text $tx $ycur \
+					-anchor $anchor  \
+					-text $title -font $axisfont -tag $selfns
+				# advance
+				set ycur [expr {$y0+$lineheight}]
+			}
+
 		}
 
 		method drawcoordsys {} {
