@@ -1363,7 +1363,8 @@ namespace eval ukaz {
 			set titleids {}
 			foreach id $zstack {
 				if {[dict exists $plotdata $id title]} {
-					lappend titleids $id
+					set title [dict get $plotdata $id title]
+					if {$title != ""} { lappend titleids $id }
 				}
 			}
 			# compute size needed for legend
@@ -1404,6 +1405,7 @@ namespace eval ukaz {
 			# draw !
 			set ycur $y0
 			foreach id $titleids {
+				set title [dict get $plotdata $id title]
 				if {[dict exists $plotdata $id type points]} {
 					set shapeproc shape-[dict get $plotdata $id pointtype]
 					$shapeproc $hull [list $sx $ycur] \
@@ -1419,7 +1421,6 @@ namespace eval ukaz {
 							-dash [dict get $plotdata $id dash] -tag $selfns
 				}
 				
-				set title [dict get $plotdata $id title]
 				$hull create text $tx $ycur \
 					-anchor $anchor  \
 					-text $title -font $axisfont -tag $selfns
