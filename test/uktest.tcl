@@ -31,8 +31,8 @@ proc pointerinfo {x y} {
 	set ::status "[format %.5g $x], [format %.5g $y]"
 }
 
-.g plot $datafile using 1:2 with points pt filled-triangles color blue ps 1.0
-.g plot $datafile using {1:(2*$2)} with lines color red lw 3
+.g plot $datafile using 1:2 with points pt filled-triangles color blue ps 1.0 title "shortsine"
+.g plot $datafile using {1:(2*$2)} with lines color red lw 3 title "doubled sine"
 for {set i 0} {$i<1000} {incr i} {
 	set x [expr {double($i)/100.0}]
 	lappend data $x [expr {sin($x*2*3.1415926535/3.2)*exp(-$x/5.0)}]

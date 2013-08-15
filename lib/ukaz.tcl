@@ -723,13 +723,15 @@ namespace eval ukaz {
 		option -yformat -default %g -configuremethod opset
 		option -font -default {} -configuremethod fontset
 		option -ticlength -default 5
+		option -samplelength -default 20
+		option -samplesize -default 1.0
+		option -key -default {top right}
 
 		option -enhanced -default false -configuremethod unimplemented
 		option -redraw -default 0 -readonly yes
 
 		# backing store for plot data
-		variable pointdata {}
-		variable linedata {}
+		variable plotdata {}
 		variable datasetnr 0
 		variable zstack {}
 
@@ -800,6 +802,8 @@ namespace eval ukaz {
 			#	?pointtype ...?
 			#	?pointsize ...?
 			#	?linewidth ...?
+			#	?dash ...?
+			#	?title ...?
 
 			parsearg {using u} {} 
 			parsearg {with w} points
@@ -808,6 +812,7 @@ namespace eval ukaz {
 			parsearg {pointsize ps} 1.0
 			parsearg {linewidth lw} 1.0
 			parsearg {dash} ""
+			parsearg {title t} ""
 		
 			#puts "Plot config: $using $with $color $pointtype $pointsize $linewidth"
 			if {$using != {}} {
@@ -826,34 +831,38 @@ namespace eval ukaz {
 			switch $with {
 				p -
 				points {
-					dict set pointdata $id data $data
-					dict set pointdata $id datarange $datarange
-					dict set pointdata $id color $color
-					dict set pointdata $id pointtype $pointtype
-					dict set pointdata $id pointsize $pointsize
+					dict set plotdata $id type points 1
+					dict set plotdata $id data $data
+					dict set plotdata $id datarange $datarange
+					dict set plotdata $id color $color
+					dict set plotdata $id pointtype $pointtype
+					dict set plotdata $id pointsize $pointsize
+					dict set plotdata $id title $title
 				}
 				l -
 				lines {
-					dict set linedata $id data $data
-					dict set linedata $id datarange $datarange
-					dict set linedata $id color $color
-					dict set linedata $id linewidth $linewidth
-					dict set linedata $id dash $dash
+					dict set plotdata $id type lines 1
+					dict set plotdata $id data $data
+					dict set plotdata $id datarange $datarange
+					dict set plotdata $id color $color
+					dict set plotdata $id linewidth $linewidth
+					dict set plotdata $id dash $dash
+					dict set plotdata $id title $title
 				}
 
 				lp -
 				linespoints {
-					dict set pointdata $id data $data
-					dict set pointdata $id datarange $datarange
-					dict set pointdata $id color $color
-					dict set pointdata $id pointtype $pointtype
-					dict set pointdata $id pointsize $pointsize
+					dict set plotdata $id type points 1
+					dict set plotdata $id type lines 1
+					dict set plotdata $id data $data
+					dict set plotdata $id datarange $datarange
+					dict set plotdata $id color $color
+					dict set plotdata $id pointtype $pointtype
+					dict set plotdata $id pointsize $pointsize
+					dict set plotdata $id title $title
 					#
-					dict set linedata $id data $data
-					dict set linedata $id datarange $datarange
-					dict set linedata $id color $color
-					dict set linedata $id linewidth $linewidth
-					dict set linedata $id dash $dash
+					dict set plotdata $id linewidth $linewidth
+					dict set plotdata $id dash $dash
 				}
 
 				default {
@@ -868,10 +877,13 @@ namespace eval ukaz {
 		}
 
 		method remove {id} {
-			dict unset pointdata $id
-			dict unset linedata $id
+			set oldzstacklen [llength $zstack]
+			dict unset plotdata $id
 			set zstack [lremove $zstack $id]
-			$self RedrawRequest
+			if {$oldzstacklen != [llength $zstack]} {
+				# redraw only if we actually deleted something
+				$self RedrawRequest
+			}
 		}
 		
 		method {set log} {{what xy} {how on}} {
@@ -1020,23 +1032,18 @@ namespace eval ukaz {
 		}
 
 		method getdata {id args} {
-			if {[dict exists $pointdata $id]} {
-				return [dict get $pointdata $id {*}$args]
-			} else {
-				return [dict get $linedata $id {*}$args]
+			if {[dict exists $plotdata $id]} {
+				return [dict get $plotdata $id {*}$args]
 			}
 		}
 
 		method calcranges {} {
 			# compute ranges spanned by data
 			set datarange {}
-			dict for {id data} $pointdata {
+			dict for {id data} $plotdata {
 				set datarange [combine_range $datarange [dict get $data datarange]]
 			}
-			dict for {id data} $linedata {
-				set datarange [combine_range $datarange [dict get $data datarange]]
-			}
-
+			
 			set dxmin [lindex [dict get $datarange xmin] $options(-logx) $options(-logy)]
 			set dxmax [lindex [dict get $datarange xmax] $options(-logx) $options(-logy)]
 			set dymin [lindex [dict get $datarange ymin] $options(-logx) $options(-logy)]
@@ -1273,38 +1280,39 @@ namespace eval ukaz {
 
 		method drawdata {} {
 			foreach id $zstack {
-				# draw in correct order
-				if {[dict exists $pointdata $id]} {
+				# draw in correct order, dispatch between 
+				# lines and points
+				if {[dict exists $plotdata $id type points]} {
 					$self drawpoints $id
 				} 
-				if {[dict exists $linedata $id]} {
+				if {[dict exists $plotdata $id type lines]} {
 					$self drawlines $id
 				}
 			}
 		}
 
 		method drawpoints {id} {
-			set data [dict get $pointdata $id data]
+			set data [dict get $plotdata $id data]
 			lassign [geometry::pointclip $data $displayrange] clipdata clipinfo
 			# store away the clipped & transformed data
 			# together with the info of the clipping
 			# needed for picking points
-			dict set pointdata $id clipinfo $clipinfo
+			dict set plotdata $id clipinfo $clipinfo
 			set transdata [$self graph2pix $clipdata]
-			dict set pointdata $id transdata $transdata
+			dict set plotdata $id transdata $transdata
 
-			set shapeproc shape-[dict get $pointdata $id pointtype]
+			set shapeproc shape-[dict get $plotdata $id pointtype]
 			$shapeproc $hull $transdata \
-				[dict get $pointdata $id color] \
-				[dict get $pointdata $id pointsize]	\
+				[dict get $plotdata $id color] \
+				[dict get $plotdata $id pointsize]	\
 				$selfns
 		}
 	
 		method drawlines {id} {
-			set data [dict get $linedata $id data]
-			set color [dict get $linedata $id color]
-			set width [dict get $linedata $id linewidth]
-			set dash [dict get $linedata $id dash]
+			set data [dict get $plotdata $id data]
+			set color [dict get $plotdata $id color]
+			set width [dict get $plotdata $id linewidth]
+			set dash [dict get $plotdata $id dash]
 		
 			set piece {}
 			set pieces {}
@@ -1344,6 +1352,15 @@ namespace eval ukaz {
 			return $ids
 		}
 	
+		method drawlegend {} {
+			# draw the titles and a sample
+			set lineheight [font metrics $axisfont -linespace]
+			# create list of all ids that have titles
+			# in correct zstack order
+			foreach id $zstack {
+			}
+		}
+
 		method drawcoordsys {} {
 			set dxmin [dict get $displaysize xmin]
 			set dymin [dict get $displaysize ymin]
@@ -1399,12 +1416,13 @@ namespace eval ukaz {
 		method Redraw {} {
 			$hull delete $selfns
 			# puts "Now drawing [$self configure]"
-			if {[dict size $pointdata]+[dict size $linedata] == 0} { return }
+			if {[dict size $plotdata] == 0} { return }
 			$self calcranges
 			$self calcsize
 			$self calctransform
 			$self drawcoordsys
 			$self drawdata
+			$self drawlegend
 			incr options(-redraw)
 			# notify embedded controls
 			set errors {}
@@ -1422,8 +1440,7 @@ namespace eval ukaz {
 		
 		method clear {} {
 			$hull delete $selfns
-			set pointdata {}
-			set linedata {}
+			set plotdata {}
 			set zstack {}
 			$self RedrawRequest
 		}
@@ -1552,10 +1569,10 @@ namespace eval ukaz {
 			# return the topmost datapoint nearer than maxdist
 			set maxdistsq [expr {$maxdist**2}]
 			foreach id [lreverse $zstack] {
-				if {[dict exists $pointdata $id transdata]} {
+				if {[dict exists $plotdata $id transdata]} {
 					# the transformed data is only available after drawing
-					set transdata [dict get $pointdata $id transdata]
-					set clipinfo [dict get $pointdata $id clipinfo]
+					set transdata [dict get $plotdata $id transdata]
+					set clipinfo [dict get $plotdata $id clipinfo]
 					set mindistsq Inf
 					set nr 0
 					foreach {xp yp} $transdata {
@@ -1576,7 +1593,7 @@ namespace eval ukaz {
 							}
 						}
 						# get the original data
-						set data [dict get $pointdata $id data]
+						set data [dict get $plotdata $id data]
 						set xd [lindex $data [expr {$dpnr*2}]]
 						set yd [lindex $data [expr {$dpnr*2+1}]]
 
