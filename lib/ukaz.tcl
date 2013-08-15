@@ -749,7 +749,8 @@ namespace eval ukaz {
 		# state during mouse action (dragging or clicking)
 		variable dragdata {dragging false clicking false}
 		
-		variable transform
+		# identity transform 
+		variable transform {1.0 0.0 1.0 0.0}
 
 		variable axisfont default
 
@@ -1627,7 +1628,7 @@ namespace eval ukaz {
 			# inverse transform this point
 			set xgraph [$self pixToX $x]
 			set ygraph [$self pixToY $y]
-			event generate $win <<MotionEvent>> -data [list $xgraph $ygraph]
+			event generate $win <<MotionEvent>> -x $x -y $y -data [list $xgraph $ygraph]
 		}
 		
 		method pickpoint {x y {maxdist 5}} {
