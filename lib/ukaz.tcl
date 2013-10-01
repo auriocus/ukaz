@@ -725,7 +725,7 @@ namespace eval ukaz {
 		option -ticlength -default 5
 		option -samplelength -default 20
 		option -samplesize -default 1.0
-		option -key -default {top right}
+		option -key -default {vertical top horizontal right disabled false}
 		option -keyspacing -default 1.0
 
 		option -enhanced -default false -configuremethod unimplemented
@@ -1030,6 +1030,28 @@ namespace eval ukaz {
 
 		method {set ylabel} {text} {
 			set options(-ylabel) $text
+			$self RedrawRequest
+		}
+
+		method {set key} {args} {
+			# no argument - just enable legend
+			if {[llength $args]==0} {
+				dict set options(-key) disabled false
+				$self RedrawRequest
+				return
+			}
+			# otherwise process args
+			foreach arg $args {
+				switch $arg {
+					top   - 
+					bottom { dict set options(-key) vertical $arg }
+					right -
+					left  { dict set options(-key) horizontal $arg }
+					on  { dict set options(-key) disabled false }
+					off  { dict set options(-key) disabled true }
+					default { return -code error "Unknown option for set key: $arg" }
+				}
+			}
 			$self RedrawRequest
 		}
 
@@ -1355,6 +1377,10 @@ namespace eval ukaz {
 		}
 	
 		method drawlegend {} {
+			# check if legend is enabled
+			if {[dict get $options(-key) disabled]} { 
+				return
+			}
 			# draw the titles and a sample
 			set lineheight [expr {[font metrics $axisfont -linespace]*$options(-keyspacing)}]
 
@@ -1379,7 +1405,7 @@ namespace eval ukaz {
 			set xoffset [expr {$options(-samplelength)/4}] ;# 1/4 length distance from border
 			
 			# y position of top sample
-			if {"top" in $options(-key)} {
+			if {[dict get $options(-key) vertical]=="top"} {
 				set y0 [expr {$dymax+$yoffset}]
 			} else {
 				# bottom
@@ -1387,7 +1413,7 @@ namespace eval ukaz {
 			}
 
 			# x coordinates of line, sample and text anchor
-			if {"left" in $options(-key)} {
+			if {[dict get $options(-key) horizontal]=="left"} {
 				set x0 [expr {$dxmin+$xoffset}]
 				set x1 [expr {$dxmin+$xoffset+$options(-samplelength)}]
 				set sx [expr {($x0+$x1)/2}]
