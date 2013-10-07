@@ -1,6 +1,6 @@
 package require snit
 package require Tk 8.6
-package provide ukaz 2.0a1
+package provide ukaz 2.0a2
 
 namespace eval ukaz {
 	
@@ -1181,14 +1181,15 @@ namespace eval ukaz {
 
 			if {$xmin == $xmax} {
 				# only one value
-				if {$options(-logx)} {
-					set xm $xmin
+				set xm $xmin
+				if {$xm != 0} {
 					set xmin [expr {$xm*0.999}]
 					set xmax [expr {$xm*1.001}]
+					if {$xm < 0} {
+						lassign [list $xmin $xmax] xmax xmin
+					}
 				} else {
-					set xm $xmin
-					set xmin [expr {$xm-0.001}]
-					set xmax [expr {$xm+0.001}]
+					lassign {-0.001 0.001} xmin xmax
 				}
 			}
 		
@@ -1199,14 +1200,15 @@ namespace eval ukaz {
 
 			if {$ymin == $ymax} {
 				# only one value
-				if {$options(-logx)} {
-					set ym $ymin
+				set ym $ymin
+				if {$ym != 0} {
 					set ymin [expr {$ym*0.999}]
 					set ymax [expr {$ym*1.001}]
+					if {$ym < 0} {
+						lassign [list $ymin $ymax] ymax ymin
+					}
 				} else {
-					set ym $ymin
-					set ymin [expr {$ym-0.001}]
-					set ymax [expr {$ym+0.001}]
+					lassign {-0.001 0.001} ymin ymax
 				}
 			}
 
@@ -1527,7 +1529,7 @@ namespace eval ukaz {
 					-anchor $anchor  \
 					-text $title -font $axisfont -tag $selfns
 				# advance
-				set ycur [expr {$y0+$lineheight}]
+				set ycur [expr {$ycur+$lineheight}]
 			}
 
 		}
