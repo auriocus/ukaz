@@ -892,6 +892,7 @@ namespace eval ukaz {
 				}
 				set datarange [calcdatarange $data]
 				dict set plotdata $id data $data
+				dict set plotdata $id datarange $datarange
 			}
 
 			if {[parsearg {with w} {}]} {
@@ -1416,7 +1417,7 @@ namespace eval ukaz {
 			set piece {}
 			set pieces {}
 			foreach {x y} $data {
-				if {!isfinite($x) || !isfinite($y)} { 
+				if {isnan($x) || isnan($y)} { 
 					# NaN value, start a new piece
 					if {[llength $piece]>0} { 
 						lappend pieces $piece
@@ -2022,6 +2023,10 @@ namespace eval ukaz {
 	proc ::tcl::mathfunc::islogfinite {x} {
 		# determine, whether x,y is a valid point on the logscale
 		expr {[string is double -strict $x] && $x < Inf && $x > 0}
+	}
+	
+	proc ::tcl::mathfunc::isnan {x} {
+		expr {$x != $x}
 	}
 
 }
