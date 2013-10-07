@@ -543,10 +543,19 @@ namespace eval ukaz {
 	}
 
 	######### Functions for parsing gnuplot style commands ###########
+	proc initparsearg {} {
+		# only checks whether args is a valid dictionary
+		upvar 1 args procargs
+		if {[catch {dict size $procargs}]} {
+			return -code error -level 2 "Malformed argument list: $procargs"
+		}
+	}
+
 	proc parsearg {option default} {
 		# read argument from args, set to default
 		# if unset in args. option can have alternative
-		# names
+		# names. Return true if the option was set
+		# from the arguments, false if the default was substituted
 		upvar 1 args procargs
 		set optname [lindex $option 0]
 		upvar 1 $optname resvar
@@ -559,6 +568,7 @@ namespace eval ukaz {
 			}
 		}
 		if {!$success} { set resvar $default }
+		return $success
 	}
 
 	########### Functions for drawing marks on a canvas ##############
@@ -806,7 +816,7 @@ namespace eval ukaz {
 			#	?linewidth ...?
 			#	?dash ...?
 			#	?title ...?
-
+			initparsearg
 			parsearg {using u} {} 
 			parsearg {with w} points
 			parsearg {color lc} auto
@@ -834,49 +844,110 @@ namespace eval ukaz {
 				p -
 				points {
 					dict set plotdata $id type points 1
-					dict set plotdata $id data $data
-					dict set plotdata $id datarange $datarange
-					dict set plotdata $id color $color
-					dict set plotdata $id pointtype $pointtype
-					dict set plotdata $id pointsize $pointsize
-					dict set plotdata $id title $title
 				}
 				l -
 				lines {
 					dict set plotdata $id type lines 1
-					dict set plotdata $id data $data
-					dict set plotdata $id datarange $datarange
-					dict set plotdata $id color $color
-					dict set plotdata $id linewidth $linewidth
-					dict set plotdata $id dash $dash
-					dict set plotdata $id title $title
 				}
 
 				lp -
 				linespoints {
 					dict set plotdata $id type points 1
 					dict set plotdata $id type lines 1
-					dict set plotdata $id data $data
-					dict set plotdata $id datarange $datarange
-					dict set plotdata $id color $color
-					dict set plotdata $id pointtype $pointtype
-					dict set plotdata $id pointsize $pointsize
-					dict set plotdata $id title $title
-					#
-					dict set plotdata $id linewidth $linewidth
-					dict set plotdata $id dash $dash
 				}
 
 				default {
 					return -code error "with must be: points, lines or linespoints"
 				}
 			}
-			
+
+			dict set plotdata $id data $data
+			dict set plotdata $id datarange $datarange
+			dict set plotdata $id color $color
+			dict set plotdata $id pointtype $pointtype
+			dict set plotdata $id pointsize $pointsize
+			dict set plotdata $id title $title
+			#
+			dict set plotdata $id linewidth $linewidth
+			dict set plotdata $id dash $dash
+
 			lappend zstack $id
 			$self RedrawRequest
 			incr datasetnr
 			return $id
 		}
+		
+		method update {id args} {
+			# same as plot, but change existing dataset
+			if {![dict exists $plotdata $id]} {
+				return -code error "No such dataset: $id"
+			}
+			
+			initparsearg
+
+			if {[parsearg data NONE]} {
+				# new data was supplied. Only then check for transformation
+				if {[parsearg {using u} {}]} {
+					set data [transformdata_using $data $using]
+				}
+				set datarange [calcdatarange $data]
+				dict set plotdata $id data $data
+			}
+
+			if {[parsearg {with w} {}]} {
+				switch $with {
+					p -
+					points {
+						dict set plotdata $id type points 1
+						dict unset plotdata $id type lines
+					}
+
+					l -
+					lines {
+						dict set plotdata $id type lines 1
+						dict unset plotdata $id type points
+					}
+
+					lp -
+					linespoints {
+						dict set plotdata $id type points 1
+						dict set plotdata $id type lines 1
+					}
+				
+					default {
+						return -code error "with must be: points, lines or linespoints"
+					}
+				}
+			}
+			
+			parsearg {color lc} auto
+			if {$color != "auto"} {
+				dict set plotdata $id color $color
+			}
+			
+			if {[parsearg {pointtype pt} {}]} {
+				dict set plotdata $id pointtype $pointtype
+			}
+
+			if {[parsearg {pointsize ps} {}]} {
+				dict set plotdata $id pointsize $pointsize
+			}
+
+			if {[parsearg {linewidth lw} {}]} {
+				dict set plotdata $id linewidth $linewidth
+			}
+
+			if {[parsearg {dash} {}]} {
+				dict set plotdata $id dash $dash
+			}
+
+			if {[parsearg {title t} {}]} {
+				dict set plotdata $id title $title
+			}
+			
+			$self RedrawRequest
+		}
+
 
 		method remove {id} {
 			set oldzstacklen [llength $zstack]
@@ -1059,6 +1130,10 @@ namespace eval ukaz {
 			if {[dict exists $plotdata $id]} {
 				return [dict get $plotdata $id {*}$args]
 			}
+		}
+
+		method getdatasetids {} {
+			dict keys $plotdata
 		}
 
 		method calcranges {} {
