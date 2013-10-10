@@ -1782,7 +1782,7 @@ namespace eval ukaz {
 
 		method saveAsPDF {fn} {
 			package require pdf4tcl
-			set size [list [winfo width $hull] [winfo height $hull]]
+			set size [list [winfo width $win] [winfo height $win]]
 			set pdf [pdf4tcl::new %AUTO% -paper $size -compress false]
 			$pdf canvas $hull
 			$pdf write -file $fn
