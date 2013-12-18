@@ -209,7 +209,7 @@ namespace eval ukaz {
 		}
 
 		proc indefinite {x y} {
-			expr {abs($x) == Inf && abs($y) == Inf}
+			expr { ($x!=$x) || ($y != $y) || (abs($x) == Inf && abs($y) == Inf)}
 		}
 
 		proc pointclip {cdata range} {
@@ -1422,7 +1422,7 @@ namespace eval ukaz {
 				if {isnan($x) || isnan($y)} { 
 					# NaN value, start a new piece
 					if {[llength $piece]>0} { 
-						lappend pieces $piece
+						lappend pieces [$self graph2pix $piece]
 					}
 					set piece {}
 					continue
