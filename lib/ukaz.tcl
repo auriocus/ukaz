@@ -838,22 +838,24 @@ namespace eval ukaz {
 			}
 			
 			set datarange [calcdatarange $data]
+			
+			set plotwith {}
 
 			set id $datasetnr
 			switch $with {
 				p -
 				points {
-					dict set plotdata $id type points 1
+					dict set plotwith points 1
 				}
 				l -
 				lines {
-					dict set plotdata $id type lines 1
+					dict set plotwith lines
 				}
 
 				lp -
 				linespoints {
-					dict set plotdata $id type points 1
-					dict set plotdata $id type lines 1
+					dict set plotwith points 1
+					dict set plotwith lines 1
 				}
 
 				default {
@@ -861,6 +863,16 @@ namespace eval ukaz {
 				}
 			}
 
+			
+			if {[dict exists $plotwith points]} {
+				# check that pointtype exists
+				lassign [info commands shape-$pointtype] ptproc
+				if {$ptproc ne "shape-$pointtype"} {
+					return -code error "Unknown pointtype $pointtype"
+				}
+			}
+
+			dict set plotdata $id type $plotwith
 			dict set plotdata $id data $data
 			dict set plotdata $id datarange $datarange
 			dict set plotdata $id color $color
