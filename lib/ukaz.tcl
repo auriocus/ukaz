@@ -849,7 +849,7 @@ namespace eval ukaz {
 				}
 				l -
 				lines {
-					dict set plotwith lines
+					dict set plotwith lines 1
 				}
 
 				lp -
