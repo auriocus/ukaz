@@ -5,6 +5,10 @@ package provide ukaz 2.0a2
 namespace eval ukaz {
 	
 	variable ns [namespace current]
+	##### General functions ###############
+	proc lremove {list element} {
+		lsearch -all -inline -not -exact $list $element
+	}
 
 	##### Functions for geometric operations (clipping) ############
 	namespace eval geometry {
