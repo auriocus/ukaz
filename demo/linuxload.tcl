@@ -14,7 +14,7 @@ proc newload {} {
 	variable graphid
 	
 	# read current loadavg last 1, 5 and 15 minutes
-	lassign [fileutil::read /proc/loadavg] l1 l5 l15
+	lassign [fileutil::cat /proc/loadavg] l1 l5 l15
 	
 	incr time
 	lappend lastload $time $l1
