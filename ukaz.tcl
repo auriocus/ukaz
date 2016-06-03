@@ -1,6 +1,6 @@
 package require snit
 package require Tk 8.6
-package provide ukaz 2.0a2
+package provide ukaz 2.0a3
 
 namespace eval ukaz {
 	
@@ -415,7 +415,7 @@ namespace eval ukaz {
 	}
 
 	############ Function for automatic axis scaling ##########
-	proc compute_ticlist {min max tics log widen format} {
+	proc compute_ticlist {min max tics log widen formatcmd} {
 		# automatically compute sensible values
 		# for the tics position, if not requested otherwise
 		lassign $tics ticrequest spec
@@ -477,7 +477,7 @@ namespace eval ukaz {
 						foreach mantisse $minor {
 							set tic [expr {$mantisse*$base}]
 							if {$tic >= $min && $tic <=$max} {
-								lappend ticlist [format $format $tic] $tic
+								lappend ticlist [{*}$formatcmd $tic] $tic
 							}
 						}
 					}
@@ -490,7 +490,7 @@ namespace eval ukaz {
 							set tic [expr {$mantisse*10.0**$expmax}]
 							if {$tic >= $max} {
 								set max $tic
-								lappend ticlist [format $format $tic] $tic
+								lappend ticlist [{*}$formatcmd $tic] $tic
 								break
 							}
 						}
@@ -541,7 +541,7 @@ namespace eval ukaz {
 		for {set i $start} {$i<=$stop} {incr i} {
 			set v [expr {$i*$ticbase}]
 			# if {$log && $v<=0} { continue }
-			lappend ticlist [format $format $v] $v
+			lappend ticlist [{*}$formatcmd $v] $v
 		}
 		return [list $ticlist $min $max]		
 	}
@@ -1121,6 +1121,37 @@ namespace eval ukaz {
 			$self RedrawRequest
 		}
 
+		method {set format} {axis args} {
+			switch $axis {
+				x  { upvar 0 options(-xformat) fmtvar }
+				y  { upvar 0 options(-yformat) fmtvar }
+				default { return -code error "Unknown axis $axis" }
+			}
+			switch [llength $args] {
+				0 { 
+					# restore default
+					set fmt %g 
+				}
+				1 {
+					# one argument = "format" formatstring
+					set fmt [list numeric {*}$args]
+				}
+				2 { 
+					# two arguments = swap order for formatcmd
+					lassign $args fmtstring type
+					if {$type ni {command timedate numeric}} {
+						return -code error "Unknown formatting procedure $type"
+					}
+					set fmt [list $type $fmtstring]
+				}
+				default {
+					return -code error "Wrong # arguments ($args given): $self set format <axis> ?fmt? ?type?"
+				}
+			}
+			set fmtvar $fmt
+			$self RedrawRequest
+		}
+
 		method {set key} {args} {
 			# no argument - just enable legend
 			if {[llength $args]==0} {
@@ -1231,13 +1262,30 @@ namespace eval ukaz {
 			# now we have the tight range in xmin,xmax, ymin, ymax
 			# compute ticlists and round for data determined values
 			lassign [compute_ticlist $xmin $xmax $options(-xtics) \
-				$options(-logx) $xwiden $options(-xformat)] xticlist xmin xmax
+				$options(-logx) $xwiden [formatcmd $options(-xformat)]] xticlist xmin xmax
 			
 			lassign [compute_ticlist $ymin $ymax $options(-ytics) \
-				$options(-logy) $ywiden $options(-yformat)] yticlist ymin ymax
+				$options(-logy) $ywiden [formatcmd $options(-yformat)]] yticlist ymin ymax
 
 			set displayrange [dict create xmin $xmin xmax $xmax ymin $ymin ymax $ymax]
 			
+		}
+
+		proc formatcmd {fmt} {
+			# return a cmd prefix to convert 
+			# tic positions into strings
+			if {[llength $fmt]<=1} {
+				# single argument - use format
+				return [list format {*}$fmt]
+			}
+			lassign $fmt type arg
+			switch $type {
+				command { return $arg }
+				timedate { return [list apply {{fmt t}  {clock format [expr {entier($t)}] -format $fmt}} $arg] }
+				numeric { return [list format $arg] }
+				default { return -code error "Wrong tic format option" }
+			}
+			error "Shit happens"
 		}
 		
 		method calcsize {} {
