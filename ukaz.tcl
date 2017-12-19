@@ -837,7 +837,7 @@ namespace eval ukaz {
 
 			if {$color == "auto"} {
 				set colors {red green blue black}
-				set ncolors [llength $color]
+				set ncolors [llength $colors]
 				set color [lindex $colors [expr {$datasetnr%$ncolors}]]
 			}
 			
@@ -1679,6 +1679,7 @@ namespace eval ukaz {
 			$hull delete $selfns
 			set plotdata {}
 			set zstack {}
+			set datasetnr 0
 			$self RedrawRequest
 		}
 
