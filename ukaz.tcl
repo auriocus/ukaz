@@ -1651,12 +1651,15 @@ namespace eval ukaz {
 		}
 
 		method Redraw {} {
-			$hull delete $selfns
 			# puts "Now drawing [$self configure]"
 			if {[dict size $plotdata] == 0} { return }
 			$self calcranges
 			$self calcsize
 			$self calctransform
+			
+			# strange effect: after everything is deleted from the canvas
+			# font metrics takes 100x longer due to caching
+			$hull delete $selfns
 			$self drawcoordsys
 			$self drawdata
 			$self drawlegend
@@ -1676,7 +1679,6 @@ namespace eval ukaz {
 		}
 		
 		method clear {} {
-			$hull delete $selfns
 			set plotdata {}
 			set zstack {}
 			set datasetnr 0
