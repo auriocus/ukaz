@@ -554,6 +554,7 @@ namespace eval ukaz {
 			return -code error -level 2 "Malformed argument list: $procargs"
 		}
 		variable parsearg_default $defaultdict
+		variable parsearg_result {}
 	}
 
 	proc parsearg {option default} {
@@ -574,6 +575,7 @@ namespace eval ukaz {
 		}
 
 		variable parsearg_default
+		variable parsearg_result
 		
 		if {!$success} {
 			# set to default. First check the default dict
@@ -584,6 +586,8 @@ namespace eval ukaz {
 				set resvar $default
 			}
 		}
+
+		dict set parsearg_result $optname $resvar
 		return $success
 	}
 
@@ -593,6 +597,11 @@ namespace eval ukaz {
 		if {[llength $procargs] != 0} {
 			return -code error -level 2 "Unknown argument(s) $procargs"
 		}
+	}
+
+	proc parsearg_asdict {} {
+		variable parsearg_result
+		return $parsearg_result
 	}
 
 	########### Functions for drawing marks on a canvas ##############
@@ -852,7 +861,6 @@ namespace eval ukaz {
 			parsearg {dash} ""
 			parsearg {title t} ""
 		
-			#puts "Plot config: $using $with $color $pointtype $pointsize $linewidth"
 			if {$using != {}} {
 				set data [transformdata_using $data $using]
 			}
@@ -1206,19 +1214,16 @@ namespace eval ukaz {
 			parsearg {dash} ""
 			parsearg {text t} ""
 			parsearg {anchor} "c"
+			parsearg {boxcolor} ""
+			parsearg {boxlinewidth} 1.0
+			parsearg {boxlinecolor} ""
+			parsearg {boxdash} ""
+			parsearg {padding} 5
 			parsearg {data at} {}
 			errorargs
-			
-			set ldata [dict create data $data \
-				pointtype $pointtype \
-				color $color \
-				pointsize $pointsize \
-				linewidth $linewidth \
-				dash $dash \
-				anchor $anchor \
-				text $text]
 
-			return $ldata
+			return [parsearg_asdict]
+			
 		}
 
 		method {set label} {args} {
@@ -1271,6 +1276,17 @@ namespace eval ukaz {
 			$self RedrawRequest
 			return $id
 
+		}
+
+		method clearhighlight {ids} {
+			if {$ids eq "all"} {
+				set ids [$self getdatasetids]
+			}
+
+			foreach id $ids {
+				dict unset plotdata $id highlight
+			}
+			$self RedrawRequest
 		}
 
 		method getdata {id args} {
@@ -1623,74 +1639,73 @@ namespace eval ukaz {
 			}
 			return $ids
 		}
-	
-		method drawmarkup {} {
-			dict for {id ldata} $labeldata {
-				dict with ldata {
-					lassign [geometry::pointclip $data $displayrange] clipdata clipinfo
-					set transdata [$self graph2pix $clipdata]
-					if {[llength $transdata] != 2} continue
+		
+		method drawmarkuppoint {coords style} {
+			# draw a single label with text in a box
+			# and a data point symbol
 
-					lassign $transdata x y
-				
-					if {$text ne ""} {
-						$hull create text $x $y \
-							-fill $color -anchor $anchor \
-							-tag $selfns -font $labelfont -text $text
+			lassign [geometry::pointclip $coords $displayrange] clipdata clipinfo
+			set transdata [$self graph2pix $clipdata]
+			if {[llength $transdata] != 2} return
+			
+			lassign $transdata x y
+			
+			dict with style {
+				if {$text ne ""} {
+					set tid [$hull create text $x $y \
+						-fill $color -anchor $anchor \
+						-tag $selfns -font $labelfont -text $text]
+
+					if {$boxcolor ne "" || $boxlinecolor ne ""} {
+						# compute size of the box
+						set bbox [$hull bbox $tid]
+						# enlarge by padding
+						lassign $bbox x1 y1 x2 y2
+						
+						set x1o [expr {$x1-$padding}]
+						set x2o [expr {$x2+$padding}]
+						set y1o [expr {$y1-$padding}]
+						set y2o [expr {$y2+$padding}]
+							
+						$hull create rectangle $x1o $y1o $x2o $y2o \
+							-fill $boxcolor -outline $boxlinecolor -dash $boxdash \
+							-width $boxlinewidth -tag $selfns
+
+						$hull raise $tid
 					}
 
-					if {$pointtype ne ""} {
-						set shapeproc shape-$pointtype
-						$shapeproc $hull $transdata \
-							$color \
-							$pointsize	\
-							$linewidth	\
-							$dash \
-							$selfns
-					}
+				}
 
+				if {$pointtype ne ""} {
+					set shapeproc shape-$pointtype
+					$shapeproc $hull $transdata \
+						$color \
+						$pointsize	\
+						$linewidth	\
+						$dash \
+						$selfns
 				}
 
 			}
 		}
 
+
+		method drawmarkup {} {
+			dict for {id ldata} $labeldata {
+				$self drawmarkuppoint [dict get $ldata data] $ldata
+			}
+		}
+		
 		method drawhighlight {id} {
 			set highlights [dict get $plotdata $id highlight]
 			set pdata [dict get $plotdata $id data]
 
 			dict for {dpnr ldata} $highlights {
-				dict with ldata {
-					set xp [lindex $pdata [expr {2*$dpnr}]]
-					set yp [lindex $pdata [expr {2*$dpnr+1}]]
-					set coords [list $xp $yp]
+				set xp [lindex $pdata [expr {2*$dpnr}]]
+				set yp [lindex $pdata [expr {2*$dpnr+1}]]
+				set coords [list $xp $yp]
 					
-					puts "Highlighting $ldata at $coords"
-					lassign [geometry::pointclip $coords $displayrange] clipdata clipinfo
-					set transdata [$self graph2pix $clipdata]
-					if {[llength $transdata] != 2} continue
-
-					lassign $transdata x y
-					
-					puts "Pixcoords $x $y"
-				
-					if {$text ne ""} {
-						$hull create text $x $y \
-							-fill $color -anchor $anchor \
-							-tag $selfns -font $labelfont -text $text
-					}
-
-					if {$pointtype ne ""} {
-						set shapeproc shape-$pointtype
-						$shapeproc $hull $transdata \
-							$color \
-							$pointsize	\
-							$linewidth	\
-							$dash \
-							$selfns
-					}
-
-				}
-
+				$self drawmarkuppoint $coords $ldata
 			}
 		}
 
