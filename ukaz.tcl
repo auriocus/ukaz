@@ -810,7 +810,7 @@ namespace eval ukaz {
 			# bindings for dragging & clicking
 			bind $win <ButtonPress-1> [mymethod drag start %x %y]
 			bind $win <Button1-Motion> [mymethod drag move %x %y]
-			bind $win <ButtonRelease-1> [mymethod drag end %x %y]
+			bind $win <ButtonRelease-1> [mymethod drag end %x %y %s]
 			bind $win <ButtonRelease-2> [mymethod zoomout]
 			bind $win <ButtonRelease-3> [mymethod zoomout]
 			bind $win <Motion> [mymethod motionevent %x %y]
@@ -1960,14 +1960,14 @@ namespace eval ukaz {
 			# if nothing is set in dragdata, it's not our business
 		}
 
-		method {drag end} {x y} {
+		method {drag end} {x y s} {
 			# user has released mouse button
 			# check if it was a click or a drag (zoom)
 			if {[dict get $dragdata clicking]} {
 				# inverse transform this point
 				set xgraph [$self pixToX $x]
 				set ygraph [$self pixToY $y]
-				event generate $win <<Click>> -x $x -y $y -data [list $xgraph $ygraph]
+				event generate $win <<Click>> -x $x -y $y -state $s -data [list $xgraph $ygraph]
 			}
 
 			if {[dict get $dragdata dragging]} {
