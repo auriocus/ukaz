@@ -8,4 +8,4 @@
 # script is sourced, the variable $dir must contain the
 # full path name of this file's directory.
 
-package ifneeded ukaz 2.0a3 [list source [file join $dir ukaz.tcl]]
+package ifneeded ukaz 2.1 [list source [file join $dir ukaz.tcl]]

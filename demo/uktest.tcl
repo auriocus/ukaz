@@ -1,9 +1,9 @@
 set basedir [file dirname [info script]]
 set datafile [file join $basedir sine.dat]
 
-lappend auto_path [file join  $basedir .. lib]
+lappend auto_path [file join  $basedir ..]
 package require Tk
-package require ukaz
+package require ukaz 2.1
 ukaz::graph .g
 ttk::label .l -textvariable status
 
@@ -42,3 +42,9 @@ for {set i 0} {$i<1000} {incr i} {
 ukaz::dragline d -variable v -orient horizontal
 .g addcontrol d
 set v 0
+
+catch {
+	.g set label at {8 -1} text "Hier" anchor c color blue
+	.g set label at {8 -1} pt squares color green ps 1.5 lw 2
+	.g highlight 0 15 color red} err
+puts $err

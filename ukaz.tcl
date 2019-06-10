@@ -1,6 +1,6 @@
 package require snit
 package require Tk 8.6
-package provide ukaz 2.0a3
+package provide ukaz 2.1
 
 namespace eval ukaz {
 	
@@ -547,12 +547,13 @@ namespace eval ukaz {
 	}
 
 	######### Functions for parsing gnuplot style commands ###########
-	proc initparsearg {} {
-		# only checks whether args is a valid dictionary
+	proc initparsearg {{defaultdict {}}} {
+		# checks whether args is a valid dictionary
 		upvar 1 args procargs
 		if {[catch {dict size $procargs}]} {
 			return -code error -level 2 "Malformed argument list: $procargs"
 		}
+		variable parsearg_default $defaultdict
 	}
 
 	proc parsearg {option default} {
@@ -571,8 +572,27 @@ namespace eval ukaz {
 				set success true
 			}
 		}
-		if {!$success} { set resvar $default }
+
+		variable parsearg_default
+		
+		if {!$success} {
+			# set to default. First check the default dict
+			# then use the hardcoded default
+			if {[dict exists $parsearg_default $optname]} {
+				set resvar [dict get $parsearg_default $optname]
+			} else {
+				set resvar $default
+			}
+		}
 		return $success
+	}
+
+	proc errorargs {} {
+		# call at the end to err on unknown options
+		upvar 1 args procargs
+		if {[llength $procargs] != 0} {
+			return -code error -level 2 "Unknown argument(s) $procargs"
+		}
 	}
 
 	########### Functions for drawing marks on a canvas ##############
@@ -747,6 +767,7 @@ namespace eval ukaz {
 
 		# backing store for plot data
 		variable plotdata {}
+		variable labeldata {}
 		variable datasetnr 0
 		variable zstack {}
 
@@ -767,6 +788,7 @@ namespace eval ukaz {
 		variable transform {1.0 0.0 1.0 0.0}
 
 		variable axisfont default
+		variable labelfont default
 
 		# store for the interactive elements (=controls)
 		variable controls {}
@@ -1173,6 +1195,54 @@ namespace eval ukaz {
 			}
 			$self RedrawRequest
 		}
+		
+		method {set label} {args} {
+			#	?text ...?
+
+			initparsearg
+			parsearg {id} ""
+
+			if {$id eq ""} {
+				# create new markup id
+				set id $datasetnr
+				incr datasetnr
+				set oldldata {}
+			} else {
+				# update existing id. Fist check, if it exists
+				if {[dict exists $labeldata $id]} {
+					set oldldata [dict get $labeldata $id]
+				} else {
+					# error
+					return -code error "Unknown markup id $id"
+				}
+			}
+
+			# restart parsing with the data from this id
+			initparsearg $oldldata
+			parsearg {color lc} black
+			parsearg {pointtype pt} ""
+			parsearg {pointsize ps} 1.0
+			parsearg {linewidth lw} 1.0
+			parsearg {dash} ""
+			parsearg {text t} ""
+			parsearg {anchor} "c"
+			parsearg {data at} {}
+			errorargs
+			
+			set ldata [dict create data $data \
+				pointtype $pointtype \
+				color $color \
+				pointsize $pointsize \
+				linewidth $linewidth \
+				dash $dash \
+				anchor $anchor \
+				text $text]
+
+			dict set labeldata $id $ldata
+			$self RedrawRequest
+			return $id
+
+		}
 
 		method getdata {id args} {
 			if {[dict exists $plotdata $id]} {
@@ -1455,6 +1525,8 @@ namespace eval ukaz {
 					$self drawlines $id
 				}
 			}
+
+			$self drawmarkup
 		}
 
 		method drawpoints {id} {
@@ -1519,6 +1591,35 @@ namespace eval ukaz {
 			return $ids
 		}
 	
+		method drawmarkup {} {
+			dict for {id ldata} $labeldata {
+				dict with ldata {
+					lassign [geometry::pointclip $data $displayrange] clipdata clipinfo
+					set transdata [$self graph2pix $clipdata]
+					if {[llength $transdata] != 2} continue
+
+					lassign $transdata x y
+				
+					if {$text ne ""} {
+						$hull create text $x $y \
+							-fill $color -anchor $anchor \
+							-tag $selfns -font $labelfont -text $text
+					}
+
+					if {$pointtype ne ""} {
+						set shapeproc shape-$pointtype
+						$shapeproc $hull $transdata \
+							$color \
+							$pointsize	\
+							$linewidth	\
+							$selfns
+					}
+
+				}
+
+			}
+		}
+
 		method drawlegend {} {
 			# check if legend is enabled
 			if {[dict get $options(-key) disabled]} { 
@@ -1682,6 +1783,7 @@ namespace eval ukaz {
 		
 		method clear {} {
 			set plotdata {}
+			set labeldata {}
 			set zstack {}
 			set datasetnr 0
 			$self RedrawRequest
