@@ -46,5 +46,5 @@ set v 0
 catch {
 	.g set label at {8 -1} text "Hier" anchor c color blue
 	.g set label at {8 -1} pt squares color green ps 1.5 lw 2
-	.g highlight 0 15 color red} err
+	.g highlight 1 3 color green} err
 puts $err
