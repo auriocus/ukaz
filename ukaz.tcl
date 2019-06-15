@@ -1861,8 +1861,8 @@ namespace eval ukaz {
 			# notify embedded controls
 			set errors {}
 			foreach c $controls {
-				if {[catch {$c Configure $displaysize} err]} {
-					lappend errors $err
+				if {[catch {$c Configure $displaysize} err errdict]} {
+					lappend errors [dict get $errdict -errorinfo]
 				}
 			}
 			if {[llength $errors] > 0} {
@@ -2278,6 +2278,324 @@ namespace eval ukaz {
 			$self DoTraces
 		}
 	}
+	
+	# GUI control to define a region of interest (min/max)
+	snit::type dragregion {
+		variable dragging
+		variable dragpos
+
+		option -command -default {}
+		option -orient -default vertical -configuremethod SetOrientation
+		
+		option -minvariable -default {} -configuremethod SetVariable
+		option -maxvariable -default {} -configuremethod SetVariable
+
+		option -color -default {#FFB0B0}
+		option -linecolor -default {gray}
+		
+		variable pos {}
+		variable pixpos
+		variable canv {}
+		variable graph {}
+		variable xmin
+		variable xmax
+		variable ymin
+		variable ymax
+
+		variable loopescape false
+		variable commandescape false
+		
+		constructor {args} {
+			$self configurelist $args
+		}
+		
+		destructor {
+			$self untrace -minvariable
+			$self untrace -maxvariable
+			if { [info commands $canv] != {} } { 
+				$canv delete $selfns.min
+				$canv delete $selfns.max
+				$canv delete $selfns.region
+			}
+		}
+
+
+		method Parent {parent canvas} {
+			if {$parent != {}} {
+				# this control is now managed
+				if {$graph != {}} {
+					return -code error "$self: Already managed by $graph"
+				}
+
+				if {[info commands $canvas] == {}} {
+					return -code error "$self: No drawing canvas: $canv"
+				}
+
+				set graph $parent
+				set canv $canvas
+				
+				$canv create line {-1 -1 -1 -1} -fill $options(-linecolor) -dash . -tag $selfns.min
+				$canv create line {-1 -1 -1 -1} -fill $options(-linecolor) -dash . -tag $selfns.max
+				$canv create rectangle -2 -2 -1 -1 -outline "" -fill $options(-color) -tag $selfns.region
+				$canv lower $selfns.region
+				
+				# Bindings for dragging
+				$canv bind $selfns.min <ButtonPress-1> [mymethod dragstart min %x %y]
+				$canv bind $selfns.min <Motion> [mymethod dragmove min %x %y]
+				$canv bind $selfns.min <ButtonRelease-1> [mymethod dragend min %x %y]
+				
+				$canv bind $selfns.max <ButtonPress-1> [mymethod dragstart max %x %y]
+				$canv bind $selfns.max <Motion> [mymethod dragmove max %x %y]
+				$canv bind $selfns.max <ButtonRelease-1> [mymethod dragend max %x %y]
+		
+				$canv bind $selfns.region <ButtonPress-1> [mymethod dragstart region %x %y]
+				$canv bind $selfns.region <Motion> [mymethod dragmove region %x %y]
+				$canv bind $selfns.region <ButtonRelease-1> [mymethod dragend region %x %y]
+	
+				# Bindings for hovering - change cursor
+				$canv bind $selfns.min <Enter> [mymethod dragenter min]
+				$canv bind $selfns.min <Leave> [mymethod dragleave]
+				$canv bind $selfns.max <Enter> [mymethod dragenter max]
+				$canv bind $selfns.max <Leave> [mymethod dragleave]
+				$canv bind $selfns.region <Enter> [mymethod dragenter region]
+				$canv bind $selfns.region <Leave> [mymethod dragleave]
+				
+				set dragging {}
+				set dragpos {}
+			
+			} else {
+				# this control was unmanaged. Remove our line
+				if {$canv != {} && [info commands $canv] != {}} {
+					$canv delete $selfns
+				}
+				set graph {}
+				set canv {}
+			}
+		}
+
+		variable configured false
+		
+		method Configure {range} {
+			# the plot range has changed
+			set loopescape false
+
+			set xmin [dict get $range xmin]
+			set xmax [dict get $range xmax]
+			set ymin [dict get $range ymin]
+			set ymax [dict get $range ymax]
+
+			set configured true
+
+			set loopescape false
+			set commandescape true
+			$self Redraw
+		}
+
+		method SetVariable {option varname} {
+			$self untrace $option
+			if {$varname != {}} {
+				upvar #0 $varname v
+				trace add variable v write [mymethod SetValue]
+				set options($option) $varname
+				$self SetValue
+			}
+		}
+
+		method untrace {option} {
+			if {$options($option)!={} } {
+				upvar #0 $options($option) v
+				trace remove variable v write [mymethod SetValue]
+				set options($option) {}
+			}			
+		}
+		
+		method SetValue {args} {
+			if {$loopescape} {
+				set loopescape false
+				return
+			}
+			upvar #0 $options(-minvariable) vmin
+			upvar #0 $options(-maxvariable) vmax
+			if {[info exists vmin] && [info exists vmax]} {
+				set loopescape true
+				catch {$self setPosition $vmin $vmax} err
+				# ignore any errors if the graph is incomplete
+			}
+		}
+
+		method DoTraces {} {
+			if {$loopescape} {
+				set loopescape false
+			} else {
+				if {$options(-minvariable) ne {} && $options(-maxvariable) ne {}} {
+					set loopescape true
+					upvar #0 $options(-minvariable) vmin
+					upvar #0 $options(-maxvariable) vmax
+					lassign $pos vmin vmax
+				}
+			}
+
+			if {$options(-command)!={}} {
+				if {$commandescape} {
+					set commandescape false
+				} else {
+					uplevel #0 [list {*}$options(-command) {*}$pos]
+				}	
+			}
+		}
+
+		method SetOrientation {option value} {
+			switch $value {
+				vertical  -
+				horizontal {
+					set options($option) $value
+				}
+				default {
+					return -code error "Unknown orientation $value: must be vertical or horizontal"
+				}
+			}
+		}
+					
+		method dragenter {what} {
+			if {$dragging eq {}} {
+				set cursor [dict get {min hand2 max hand2 region sb_h_double_arrow} $what]
+				$canv configure -cursor $cursor
+			}
+		}
+
+		method dragleave {} {
+			if {$dragging eq {}} {
+				$canv configure -cursor {}
+			}
+		}
+
+		method dragstart {what x y} {
+			set dragging $what
+			set dragpos [list $x $y {*}$pixpos]
+		}
+
+		method dragmove {what x y} {
+			if {$dragging ne {}} {
+				if {$what in {min max}} {
+					$self GotoPixel $dragging $x $y
+				} else {
+					$self MoveRegion $x $y
+				}
+			}
+		}
+
+		method dragend {what x y} {
+			set dragging {}
+		}
+
+		method GotoPixel {what px py} {
+			if {$graph=={}} { return }
+
+			lassign $pos vmin vmax
+			lassign $pixpos pmin pmax
+
+			set vx [$graph pixToX $px]
+			set vy [$graph pixToY $py]
+			
+			if {$options(-orient) eq "horizontal"} {
+				if {$what eq "min"} {
+					set vmin $vy
+					set pmin $py
+				} else {
+					set vmax $vy
+					set pmax $py
+				}
+			} else {
+				if {$what eq "min"} {
+					set vmin $vx
+					set pmin $px
+				} else {
+					set vmax $vx
+					set pmax $px
+				}
+
+			}
+			
+			set pixpos [list $pmin $pmax]
+			set pos [list $vmin $vmax]
+
+			$self drawregion
+			$self DoTraces
+		}
+
+		method MoveRegion {px py} {
+			lassign $dragpos startpx startpy startpmin startpmax
+
+			if {$options(-orient) eq "vertical"} {
+				set pxmin [expr {$startpmin + $px - $startpx}]
+				set pxmax [expr {$startpmax + $px - $startpx}]
+				set pymin $py
+				set pymax $py
+			} else {
+				set pymin [expr {$startpmin + $py - $startpy}]
+				set pymax [expr {$startpmax + $py - $startpy}]
+				set pxmin $px
+				set pxmax $px
+			}
+			$self GotoPixel min $pxmin $pymin
+			$self GotoPixel max $pxmax $pymax
+		}
+
+		method setPosition {vmin vmax} {
+			set pos [list $vmin $vmax]
+			$self Redraw
+		}
+
+		method Redraw {} {
+
+			if {$graph=={}} { return }
+
+			lassign $pos vmin vmax
+			if {$vmin eq {} || $vmax eq {}} { return }
+			
+			lassign [$graph graph2pix [list $vmin $vmin]] nxmin nymin
+			lassign [$graph graph2pix [list $vmax $vmax]] nxmax nymax
+
+			if {$options(-orient) eq "horizontal"} {
+				set pmin $nymin
+				set pmax $nymax
+			} else {
+				set pmin $nxmin
+				set pmax $nxmax
+			}
+
+			set pixpos [list $pmin $pmax]
+			$self drawregion
+			$self DoTraces
+		}
+
+		method drawregion {} {
+			if {!$configured} { return }
+
+			lassign $pixpos pmin pmax
+
+			#	puts "pos: $pos pixpos: $pixpos"
+
+			if {$options(-orient)=="horizontal"} {
+				$canv coords $selfns.min [list $xmin $pmin $xmax $pmin]
+				$canv coords $selfns.max [list $xmin $pmax $xmax $pmax]
+				$canv coords $selfns.region [list $xmin $pmin $xmax $pmax]
+			} else {
+				$canv coords $selfns.min [list $pmin $ymin $pmin $ymax]
+				$canv coords $selfns.max [list $pmax $ymin $pmax $ymax]
+				$canv coords $selfns.region [list $pmin $ymin $pmax $ymax]
+			}
+
+			$canv raise $selfns.min
+			$canv raise $selfns.max
+		}
+
+		method getPosition {} {
+			return $pos
+		}
+	
+	}
+
 
 	proc ::tcl::mathfunc::isfinite {x} {
 		# determine, whether x,y is a valid point

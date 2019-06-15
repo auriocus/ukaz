@@ -41,7 +41,12 @@ for {set i 0} {$i<1000} {incr i} {
 
 ukaz::dragline d -variable v -orient horizontal
 .g addcontrol d
-set v 0
+set v 1
+
+ukaz::dragregion r -minvariable rmin -maxvariable rmax -orient vertical
+.g addcontrol r
+set rmin 1
+set rmax 2
 
 catch {
 	.g set label at {8 -1} text "Hier" anchor c color blue
