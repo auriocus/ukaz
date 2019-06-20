@@ -48,6 +48,10 @@ ukaz::dragregion r -minvariable rmin -maxvariable rmax -orient vertical
 set rmin 1
 set rmax 2
 
+ukaz::dragregion r2 -orient vertical -color #0000FF
+r2 setPosition 4 5
+.g addcontrol r2
+
 catch {
 	.g set label at {8 -1} text "Hier" anchor c color blue
 	.g set label at {8 -1} pt squares color green ps 1.5 lw 2

@@ -2078,6 +2078,19 @@ namespace eval ukaz {
 				set controls [lremove $controls $c]
 			}
 		}
+
+		variable controlFocus {}
+		method controlClicked {which} {
+			if {$controlFocus ne $which && $controlFocus ne {}} {
+				$controlFocus FocusOut
+			}
+			$which FocusIn
+			set controlFocus $which
+		}
+
+		method getSelectedControl {} {
+			return $controlFocus
+		}
 	}
 
 
@@ -2108,7 +2121,6 @@ namespace eval ukaz {
 			$self untrace
 			if { [info commands $canv] != {} } { $canv delete $selfns }
 		}
-
 
 		method Parent {parent canvas} {
 			if {$parent != {}} {
@@ -2290,8 +2302,8 @@ namespace eval ukaz {
 		option -minvariable -default {} -configuremethod SetVariable
 		option -maxvariable -default {} -configuremethod SetVariable
 
-		option -color -default {#FFB0B0}
-		option -linecolor -default {gray}
+		option -color -default {#FF3030}
+		option -fillcolor -default {#FFB0B0}
 		
 		variable pos {}
 		variable pixpos
@@ -2319,6 +2331,14 @@ namespace eval ukaz {
 			}
 		}
 
+		proc fadecolor {color alpha} {
+			# blend a color with white
+			scan $color {#%02x%02x%02x} r g b
+			set R [expr {int(255*(1-$alpha) + $r*$alpha)}]
+			set G [expr {int(255*(1-$alpha) + $g*$alpha)}]
+			set B [expr {int(255*(1-$alpha) + $b*$alpha)}]
+			format {#%02X%02X%02X} $R $G $B
+		}
 
 		method Parent {parent canvas} {
 			if {$parent != {}} {
@@ -2333,10 +2353,13 @@ namespace eval ukaz {
 
 				set graph $parent
 				set canv $canvas
+
+				set options(-fillcolor) [fadecolor $options(-color) 0.2]
+				puts "Fadecolor: $options(-fillcolor)"
 				
-				$canv create line {-1 -1 -1 -1} -fill $options(-linecolor) -dash . -tag $selfns.min
-				$canv create line {-1 -1 -1 -1} -fill $options(-linecolor) -dash . -tag $selfns.max
-				$canv create rectangle -2 -2 -1 -1 -outline "" -fill $options(-color) -tag $selfns.region
+				$canv create line {-1 -1 -1 -1} -fill $options(-color) -dash {6 4} -tag $selfns.min
+				$canv create line {-1 -1 -1 -1} -fill $options(-color) -dash {6 4} -tag $selfns.max
+				$canv create rectangle -2 -2 -1 -1 -outline "" -fill $options(-fillcolor) -tag $selfns.region
 				$canv lower $selfns.region
 				
 				# Bindings for dragging
@@ -2455,7 +2478,17 @@ namespace eval ukaz {
 				}
 			}
 		}
-					
+			
+		method FocusIn {} {
+			$canv itemconfigure $selfns.min -width 3 -dash {6 4}
+			$canv itemconfigure $selfns.max -width 3 -dash {6 4}
+		}
+
+		method FocusOut {} {
+			$canv itemconfigure $selfns.min -width 1 -dash {6 4}
+			$canv itemconfigure $selfns.max -width 1 -dash {6 4}
+		}
+
 		method dragenter {what} {
 			if {$dragging eq {}} {
 				set cursor [dict get {min hand2 max hand2 region sb_h_double_arrow} $what]
@@ -2472,6 +2505,8 @@ namespace eval ukaz {
 		method dragstart {what x y} {
 			set dragging $what
 			set dragpos [list $x $y {*}$pixpos]
+
+			$graph controlClicked $self
 		}
 
 		method dragmove {what x y} {
