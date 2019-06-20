@@ -43,13 +43,13 @@ ukaz::dragline d -variable v -orient horizontal
 .g addcontrol d
 set v 1
 
-ukaz::dragregion r -minvariable rmin -maxvariable rmax -orient vertical
+ukaz::dragregion r -minvariable rmin -maxvariable rmax -orient vertical -label ROI0
 .g addcontrol r
 set rmin 1
 set rmax 2
 
-ukaz::dragregion r2 -orient vertical -color #0000FF
-r2 setPosition 4 5
+ukaz::dragregion r2 -orient horizontal -color #0000FF -label ROI1
+r2 setPosition -0.5 0
 .g addcontrol r2
 
 catch {

@@ -2298,15 +2298,17 @@ namespace eval ukaz {
 
 		option -command -default {}
 		option -orient -default vertical -configuremethod SetOrientation
+		option -label -default {} -configuremethod SetOption
 		
 		option -minvariable -default {} -configuremethod SetVariable
 		option -maxvariable -default {} -configuremethod SetVariable
 
-		option -color -default {#FF3030}
-		option -fillcolor -default {#FFB0B0}
+		option -color -default {#FF3030} -configuremethod SetColor
+		option -fillcolor -default {#FFB0B0} -configuremethod SetOption
 		
 		variable pos {}
 		variable pixpos
+		variable pcenter
 		variable canv {}
 		variable graph {}
 		variable xmin
@@ -2354,13 +2356,15 @@ namespace eval ukaz {
 				set graph $parent
 				set canv $canvas
 
-				set options(-fillcolor) [fadecolor $options(-color) 0.2]
-				puts "Fadecolor: $options(-fillcolor)"
-				
 				$canv create line {-1 -1 -1 -1} -fill $options(-color) -dash {6 4} -tag $selfns.min
 				$canv create line {-1 -1 -1 -1} -fill $options(-color) -dash {6 4} -tag $selfns.max
 				$canv create rectangle -2 -2 -1 -1 -outline "" -fill $options(-fillcolor) -tag $selfns.region
 				$canv lower $selfns.region
+				
+				$canv create text {-2 -2} -text $options(-label) -fill $options(-color) -tag $selfns.text
+				if {$options(-orient) eq "vertical"} {
+					$canv itemconfigure $selfns.text -angle 90
+				}
 				
 				# Bindings for dragging
 				$canv bind $selfns.min <ButtonPress-1> [mymethod dragstart min %x %y]
@@ -2374,6 +2378,10 @@ namespace eval ukaz {
 				$canv bind $selfns.region <ButtonPress-1> [mymethod dragstart region %x %y]
 				$canv bind $selfns.region <Motion> [mymethod dragmove region %x %y]
 				$canv bind $selfns.region <ButtonRelease-1> [mymethod dragend region %x %y]
+				
+				$canv bind $selfns.text <ButtonPress-1> [mymethod dragstart region %x %y]
+				$canv bind $selfns.text <Motion> [mymethod dragmove region %x %y]
+				$canv bind $selfns.text <ButtonRelease-1> [mymethod dragend region %x %y]
 	
 				# Bindings for hovering - change cursor
 				$canv bind $selfns.min <Enter> [mymethod dragenter min]
@@ -2469,7 +2477,9 @@ namespace eval ukaz {
 
 		method SetOrientation {option value} {
 			switch $value {
-				vertical  -
+				vertical  {
+					set options($option) $value
+				}
 				horizontal {
 					set options($option) $value
 				}
@@ -2477,8 +2487,20 @@ namespace eval ukaz {
 					return -code error "Unknown orientation $value: must be vertical or horizontal"
 				}
 			}
+			$self Redraw
 		}
-			
+
+		method SetOption {option value} {
+			set options($option) $value
+			$self Redraw
+		}
+
+		method SetColor {option color} {
+			set options($option) $color
+			set options(-fillcolor) [fadecolor $color 0.2]
+			$self Redraw
+		}
+
 		method FocusIn {} {
 			$canv itemconfigure $selfns.min -width 3 -dash {6 4}
 			$canv itemconfigure $selfns.max -width 3 -dash {6 4}
@@ -2491,7 +2513,10 @@ namespace eval ukaz {
 
 		method dragenter {what} {
 			if {$dragging eq {}} {
-				set cursor [dict get {min hand2 max hand2 region sb_h_double_arrow} $what]
+				set cursor [dict get {
+					vertical {min hand2 max hand2 region sb_h_double_arrow}
+					horizontal {min hand2 max hand2 region sb_v_double_arrow}
+					} $options(-orient) $what]
 				$canv configure -cursor $cursor
 			}
 		}
@@ -2551,6 +2576,7 @@ namespace eval ukaz {
 
 			}
 			
+			set pcenter [expr {($pmin + $pmax)/2}]
 			set pixpos [list $pmin $pmax]
 			set pos [list $vmin $vmax]
 
@@ -2598,7 +2624,8 @@ namespace eval ukaz {
 				set pmin $nxmin
 				set pmax $nxmax
 			}
-
+			
+			set pcenter [expr {($pmin + $pmax)/2}]
 			set pixpos [list $pmin $pmax]
 			$self drawregion
 			$self DoTraces
@@ -2609,17 +2636,29 @@ namespace eval ukaz {
 
 			lassign $pixpos pmin pmax
 
+			$canv itemconfigure $selfns.text -text $options(-label)
 			#	puts "pos: $pos pixpos: $pixpos"
 
 			if {$options(-orient)=="horizontal"} {
 				$canv coords $selfns.min [list $xmin $pmin $xmax $pmin]
 				$canv coords $selfns.max [list $xmin $pmax $xmax $pmax]
 				$canv coords $selfns.region [list $xmin $pmin $xmax $pmax]
+				set left [expr {$xmin*0.95 + $xmax*0.05}]
+				$canv coords $selfns.text [list $left $pcenter]
+				$canv itemconfigure $selfns.text -angle 0 -anchor w
 			} else {
 				$canv coords $selfns.min [list $pmin $ymin $pmin $ymax]
 				$canv coords $selfns.max [list $pmax $ymin $pmax $ymax]
 				$canv coords $selfns.region [list $pmin $ymin $pmax $ymax]
+				set top [expr {$ymin*0.05 + $ymax*0.95}]
+				$canv coords $selfns.text [list $pcenter $top]
+				$canv itemconfigure $selfns.text -angle 90 -anchor e
 			}
+
+			$canv itemconfigure $selfns.min -fill $options(-color)
+			$canv itemconfigure $selfns.max -fill $options(-color)
+			$canv itemconfigure $selfns.region -fill $options(-fillcolor)
+			$canv itemconfigure $selfns.text -fill $options(-color)
 
 			$canv raise $selfns.min
 			$canv raise $selfns.max
