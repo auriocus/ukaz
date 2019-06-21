@@ -2051,6 +2051,7 @@ namespace eval ukaz {
 			$pdf destroy
 		}
 
+		variable controlFocus {}
 		method addcontrol {c} {
 			# add the control object c to the list of managed
 			# objects. First send a Parent command to notify it
@@ -2076,10 +2077,12 @@ namespace eval ukaz {
 			# from our list without executing anything
 			if {[lsearch -exact $controls $c]>=0} {
 				set controls [lremove $controls $c]
+				if {$controlFocus eq $c} {
+					set controlFocus {}
+				}
 			}
 		}
 
-		variable controlFocus {}
 		method controlClicked {which} {
 			if {$controlFocus ne $which && $controlFocus ne {}} {
 				$controlFocus FocusOut
@@ -2330,6 +2333,7 @@ namespace eval ukaz {
 				$canv delete $selfns.min
 				$canv delete $selfns.max
 				$canv delete $selfns.region
+				$canv delete $selfns.text
 			}
 		}
 
