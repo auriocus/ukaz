@@ -774,6 +774,9 @@ namespace eval ukaz {
 		option -enhanced -default false -configuremethod unimplemented
 		option -redraw -default 0 -readonly yes
 
+		option -displayrange -readonly yes -cgetmethod getdisplayrange
+		option -displaysize -readonly yes -cgetmethod getdisplaysize
+
 		# backing store for plot data
 		variable plotdata {}
 		variable labeldata {}
@@ -1557,6 +1560,14 @@ namespace eval ukaz {
 			} else {
 				expr {($y-$yadd)/$ymul}
 			}
+		}
+
+		method getdisplayrange {args} {
+			return $displayrange
+		}
+
+		method getdisplaysize {args} {
+			return $displaysize
 		}
 
 		method drawdata {} {
