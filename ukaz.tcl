@@ -2303,6 +2303,13 @@ namespace eval ukaz {
 			$canv raise $selfns
 			$self DoTraces
 		}
+
+		method gotoRel {p} {
+			# move the line to the ratio p of the graph on screen
+			set x [expr {$xmin + ($xmax - $xmin)*$p}]
+			set y [expr {$ymin + ($ymax - $ymin)*$p}]
+			$self GotoPixel $x $y
+		}
 	}
 	
 	# GUI control to define a region of interest (min/max)
@@ -2597,6 +2604,17 @@ namespace eval ukaz {
 
 			$self drawregion
 			$self DoTraces
+		}
+		
+		method gotoRel {pmin pmax} {
+			# move the region to the ratio p(min|max) of the graph on screen
+			set minx [expr {$xmin + ($xmax - $xmin)*$pmin}]
+			set miny [expr {$ymin + ($ymax - $ymin)*$pmin}]
+			$self GotoPixel min $minx $miny
+
+			set maxx [expr {$xmin + ($xmax - $xmin)*$pmin}]
+			set maxy [expr {$ymin + ($ymax - $ymin)*$pmin}]
+			$self GotoPixel max $maxx $maxy
 		}
 
 		method MoveRegion {px py} {
