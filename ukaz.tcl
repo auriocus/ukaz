@@ -768,7 +768,7 @@ namespace eval ukaz {
 		option -ticlength -default 5
 		option -samplelength -default 20
 		option -samplesize -default 1.0
-		option -key -default {vertical top horizontal right disabled false}
+		option -key -default {vertical top horizontal right disabled false outside inside}
 		option -keyspacing -default 1.0
 
 		option -enhanced -default false -configuremethod unimplemented
@@ -1193,12 +1193,17 @@ namespace eval ukaz {
 				return
 			}
 			# otherwise process args
+			# The value "outside" means horizontal but outside the plot area
+			# The value "outside-dummy" means "outside" but the option is only used to compute the right margin width for synchronized Bode plots
 			foreach arg $args {
 				switch $arg {
 					top   - 
 					bottom { dict set options(-key) vertical $arg }
 					right -
 					left  { dict set options(-key) horizontal $arg }
+					inside  - 
+					outside  -
+					outside-dummy  { dict set options(-key) outside $arg }
 					on  { dict set options(-key) disabled false }
 					off  { dict set options(-key) disabled true }
 					default { return -code error "Unknown option for set key: $arg" }
@@ -1428,6 +1433,24 @@ namespace eval ukaz {
 
 			set margin [expr {0.03*$w}]
 
+			# Compute extra margin when legend is placed horizontaly outside of the plot area
+			if {[dict get $options(-key) outside] != "inside"} {
+				# Get longest legend text
+				set titlemax ""
+				foreach id $zstack {
+					if {[dict exists $plotdata $id title]} {
+						set title [dict get $plotdata $id title]
+						if {[string length $title]>[string length $titlemax]} {
+							set titlemax $title
+						}
+					}
+				}
+				# Get length of legend
+				set extramargin [expr {[font measure $axisfont $titlemax] + $options(-samplelength)}]
+			} else {
+				set extramargin 0
+			}
+
 			# set left margin to have room for ytic labels + ylabel
 			set deskxmin [expr {($lwidth+$options(-ticlength))+$margin}]
 			if { $options(-ylabel) != "" } {
@@ -1438,8 +1461,17 @@ namespace eval ukaz {
 			}
 			# if necessary, make space for first xtic
 			set deskxmin [expr {max($deskxmin, 0.5*$xminwidth)}]
-
 			set deskxmax [expr {$w-0.5*$xmaxwidth-$margin}]
+
+			if {[dict get $options(-key) outside] != "inside"} {
+				# make extra space for legend
+				if {[dict get $options(-key) horizontal] == "left"} {
+					set deskxmin [expr {$deskxmin + $extramargin}]
+				} else {
+					set deskxmax [expr {$deskxmax - $extramargin}]
+				}
+			}
+			
 			set deskymax [expr {max($options(-ticlength),$lascent)+$margin}]
 			set deskymin [expr {($h-$options(-ticlength)-$lineheight-$ldescent)-$margin}]
 			if { $options(-xlabel) != "" } {
@@ -1726,6 +1758,10 @@ namespace eval ukaz {
 			if {[dict get $options(-key) disabled]} { 
 				return
 			}
+			# check if legend is dummy
+			if {[dict get $options(-key) outside]=="outside-dummy"} {
+				return
+			}
 			# draw the titles and a sample
 			set lineheight [expr {[font metrics $axisfont -linespace]*$options(-keyspacing)}]
 
@@ -1758,19 +1794,40 @@ namespace eval ukaz {
 			}
 
 			# x coordinates of line, sample and text anchor
-			if {[dict get $options(-key) horizontal]=="left"} {
-				set x0 [expr {$dxmin+$xoffset}]
-				set x1 [expr {$dxmin+$xoffset+$options(-samplelength)}]
-				set sx [expr {($x0+$x1)/2}]
-				set tx [expr {$x1+$xoffset}]
-				set anchor w
+			if {[dict get $options(-key) outside]=="inside"} {
+				# place key inside
+				if {[dict get $options(-key) horizontal]=="left"} {
+					# inside left
+					set x0 [expr {$dxmin+$xoffset}]
+					set x1 [expr {$dxmin+$xoffset+$options(-samplelength)}]
+					set sx [expr {($x0+$x1)/2}]
+					set tx [expr {$x1+$xoffset}]
+					set anchor w
+				} elseif {[dict get $options(-key) horizontal]=="right"} {
+					# inside right
+					set x0 [expr {$dxmax-$xoffset-$options(-samplelength)}]
+					set x1 [expr {$dxmax-$xoffset}]
+					set sx [expr {($x0+$x1)/2}]
+					set tx [expr {$x0-$xoffset}]
+					set anchor e
+				}
 			} else {
-				# right
-				set x0 [expr {$dxmax-$xoffset-$options(-samplelength)}]
-				set x1 [expr {$dxmax-$xoffset}]
-				set sx [expr {($x0+$x1)/2}]
-				set tx [expr {$x0-$xoffset}]
-				set anchor e
+				# place key outside 
+				if {[dict get $options(-key) horizontal]=="left"} {
+					# outside left
+					set x0 [expr {$xoffset}]
+					set x1 [expr {$xoffset+$options(-samplelength)}]
+					set sx [expr {($x0+$x1)/2}]
+					set tx [expr {$x1+$xoffset}]
+					set anchor w
+				} else {
+					# outside right
+					set x0 [expr {$dxmax+$xoffset+$options(-samplelength)}]
+					set x1 [expr {$dxmax+$xoffset}]
+					set sx [expr {($x0+$x1)/2}]
+					set tx [expr {$x0+$xoffset}]
+					set anchor w
+				}
 			}
 
 			# draw !
