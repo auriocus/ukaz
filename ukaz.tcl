@@ -3,7 +3,7 @@ package require Tk 8.6
 package provide ukaz 2.1
 
 namespace eval ukaz {
-	
+
 	variable ns [namespace current]
 	##### General functions ###############
 	proc lremove {list element} {
@@ -25,7 +25,7 @@ namespace eval ukaz {
 
 			set result {}
 			set piece {}
-			
+
 			# clip infinity of first point
 			set x1 Inf
 			set y1 Inf
@@ -35,10 +35,10 @@ namespace eval ukaz {
 					return {}
 				}
 			}
-			
+
 			foreach {x2 y2} $cdata {
 				# clip total indefinite points
-				if {[indefinite $x2 $y2]} {	
+				if {[indefinite $x2 $y2]} {
 					# end last line
 					if {$piece != {}} {
 						lappend result $piece
@@ -47,7 +47,7 @@ namespace eval ukaz {
 					continue
 				}
 
-				lassign [cohensutherland $x1 $y1 $x2 $y2] clipline type 
+				lassign [cohensutherland $x1 $y1 $x2 $y2] clipline type
 				switch $type {
 					rightclip {
 						# second point was clipped
@@ -57,7 +57,7 @@ namespace eval ukaz {
 							lappend result $clipline
 						} else {
 							lappend piece {*}[lrange $clipline 2 3]
-							lappend result $piece 
+							lappend result $piece
 							set piece {}
 						}
 					}
@@ -86,7 +86,7 @@ namespace eval ukaz {
 
 					bothclip {
 						# create line on it's own
-						
+
 						# end last line
 						if {$piece != {}} {
 							lappend result $piece
@@ -114,7 +114,7 @@ namespace eval ukaz {
 			variable xmax
 			variable ymin
 			variable ymax
-			
+
 			set codeleft [pointcode $x1 $y1]
 			set coderight [pointcode $x2 $y2]
 			if {($codeleft | $coderight) == 0} {
@@ -140,7 +140,7 @@ namespace eval ukaz {
 					lassign [intersect $x2 $y2 $x1 $y1] x2 y2
 					set coderight [pointcode $x2 $y2]
 				}
-			
+
 				if {($codeleft & $coderight) != 0} {
 					return {{} empty}
 				}
@@ -167,10 +167,10 @@ namespace eval ukaz {
 			variable xmax
 			variable ymin
 			variable ymax
-			
-			expr {(($x<$xmin)?1:0) | 
-				  (($x>$xmax)?2:0) | 
-				  (($y<$ymin)?4:0) | 
+
+			expr {(($x<$xmin)?1:0) |
+				  (($x>$xmax)?2:0) |
+				  (($y<$ymin)?4:0) |
 				  (($y>$ymax)?8:0) }
 		}
 
@@ -179,7 +179,7 @@ namespace eval ukaz {
 			variable xmax
 			variable ymin
 			variable ymax
-			
+
 			# check for infinity
 			if {$y1 == Inf} {
 				return [list $x2 $ymax]
@@ -196,7 +196,7 @@ namespace eval ukaz {
 			if {$x1 == -Inf} {
 				return [list $xmin $y2]
 			}
-			
+
 			if {$y1>$ymax} {
 				return [list [expr {$x1+($x2-$x1)*($ymax-$y1)/($y2-$y1)}] $ymax]
 			}
@@ -217,7 +217,7 @@ namespace eval ukaz {
 		}
 
 		proc pointclip {cdata range} {
-			# remove all points which are NaN or outside 
+			# remove all points which are NaN or outside
 			# the clip region
 			set xmin [dict get $range xmin]
 			set xmax [dict get $range xmax]
@@ -247,7 +247,7 @@ namespace eval ukaz {
 		if {[dict size $Requests] == 0} {
 			after idle ${ns}::doRequests
 		}
-		
+
 		dict set Requests $cmd 1
 	}
 
@@ -265,7 +265,7 @@ namespace eval ukaz {
 
 	########## Functions for math on data ##############################
 	proc parsedata_using {fdata args} {
-		# read column data 
+		# read column data
 		# analogous to "using" in gnuplot
 		# the elements of formatlist are interpreted as expr-String with embedded $0, $1, ...
 		# return as flat a list
@@ -318,7 +318,7 @@ namespace eval ukaz {
 				}
 				lappend thisline $datum
 			}
-			
+
 			namespace delete formula
 
 			if {$err != {}} {
@@ -329,7 +329,7 @@ namespace eval ukaz {
 				incr 0
 				incr ndata
 			}
-			
+
 		}
 
 		variable parseinfo [list $ndata $ncomments $nblanks $skip]
@@ -352,7 +352,7 @@ namespace eval ukaz {
 		close $fd
 		concat {*}[parsedata_using $fdata $xformat $yformat]
 	}
-	
+
 	############## Functions for intervals ##################
 	proc calcdatarange {data}  {
 		# compute min/max and corresponding log min/max
@@ -366,7 +366,7 @@ namespace eval ukaz {
 		foreach {x y} $data {
 			set xfin [list [expr {isfinite($x)}]  [expr {islogfinite($x)}]]
 			set yfin [list [expr {isfinite($y)}]  [expr {islogfinite($y)}]]
-			
+
 			foreach logx {0 1} {
 				foreach logy {0 1} {
 					if {[lindex $xfin $logx] && [lindex $yfin $logy]} {
@@ -378,7 +378,7 @@ namespace eval ukaz {
 				}
 			}
 		}
-		dict create xmin $xmin ymin $ymin xmax $xmax ymax $ymax	
+		dict create xmin $xmin ymin $ymin xmax $xmax ymax $ymax
 	}
 
 	proc combine_range {range1 range2} {
@@ -442,7 +442,7 @@ namespace eval ukaz {
 				# and subdivide for small span
 				if {$log} {
 					set decades [expr {log10($max)-log10($min)}]
-					
+
 					if {$decades<=2} {
 						set minor {1 2 3 4 5}
 					} elseif {$decades<=3} {
@@ -455,9 +455,9 @@ namespace eval ukaz {
 
 					set expmin [expr {int(floor(log10($min)))}]
 					set expmax [expr {int(floor(log10($max)))}]
-					
+
 					# the range is between 10^expmin and 10^(expmax+1)
-					
+
 					# if widening downwards, look for the largest
 					# tic that is smaller or equal to the required minimum
 					if {[dict get $widen min]} {
@@ -469,7 +469,7 @@ namespace eval ukaz {
 						}
 						set min $wmin
 					}
-			
+
 					set ticlist {}
 
 					for {set exp $expmin} {$exp <= $expmax} {incr exp} {
@@ -495,7 +495,7 @@ namespace eval ukaz {
 							}
 						}
 					}
-			
+
 					return [list $ticlist $min $max]
 				} else {
 					# automatic placement. In linear case,
@@ -510,7 +510,7 @@ namespace eval ukaz {
 					set xb 10
 					if {$xfrac <= 0.70} { set xb 5}
 					if {$xfrac <= 0.31} { set xb 2}
-					
+
 					set ticbase [expr {$xb*$base}]
 				}
 			}
@@ -529,7 +529,7 @@ namespace eval ukaz {
 		} else {
 			set start [expr {int(ceil(double($min)/double($ticbase)))}]
 		}
-		
+
 		if {[dict get $widen max]} {
 			set stop [expr {int(ceil(double($max)/double($ticbase)))}]
 			set max [expr {$ticbase*$stop}]
@@ -543,7 +543,7 @@ namespace eval ukaz {
 			# if {$log && $v<=0} { continue }
 			lappend ticlist [{*}$formatcmd $v] $v
 		}
-		return [list $ticlist $min $max]		
+		return [list $ticlist $min $max]
 	}
 
 	######### Functions for parsing gnuplot style commands ###########
@@ -576,7 +576,7 @@ namespace eval ukaz {
 
 		variable parsearg_default
 		variable parsearg_result
-		
+
 		if {!$success} {
 			# set to default. First check the default dict
 			# then use the hardcoded default
@@ -616,7 +616,7 @@ namespace eval ukaz {
 		}
 		return $ids
 	}
-	
+
 	proc shape-filled-circles {can coord color size width dash tag} {
 		set r [expr {5.0*$size}]
 		set ids {}
@@ -639,7 +639,7 @@ namespace eval ukaz {
 		}
 		return $ids
 	}
-	
+
 	proc shape-filled-squares {can coord color size width dash tag} {
 		set s [expr {5.0*$size}]
 		set ids {}
@@ -667,7 +667,7 @@ namespace eval ukaz {
 		}
 		return $ids
 	}
-	
+
 	proc shape-filled-hexagons {can coord color size width dash tag} {
 		set s [expr {5.0*$size}]
 		set clist {1 -0.5 0 -1.12 -1 -0.5 -1 0.5 0 1.12 1 0.5}
@@ -699,7 +699,7 @@ namespace eval ukaz {
 		}
 		return $ids
 	}
-	
+
 	proc shape-filled-triangles {can coord color size width dash tag} {
 		set s [expr {8.0*$size}]
 		set clist {0.0 +1.0 0.5 -0.5 -0.5 -0.5}
@@ -731,7 +731,7 @@ namespace eval ukaz {
 		}
 		return $ids
 	}
-	
+
 	proc shape-filled-uptriangles {can coord color size width dash tag} {
 		set s [expr {8.0*$size}]
 		set clist {0.0 -1.0 0.5 0.5 -0.5 0.5}
@@ -788,15 +788,15 @@ namespace eval ukaz {
 		variable yticlist
 		variable displayrange
 		variable displaysize
-		
-		# store the history of ranges 
+
+		# store the history of ranges
 		# by zooming with the mouse
 		variable zoomstack {}
 
 		# state during mouse action (dragging or clicking)
 		variable dragdata {dragging false clicking false}
-		
-		# identity transform 
+
+		# identity transform
 		variable transform {1.0 0.0 1.0 0.0}
 
 		variable axisfont default
@@ -809,7 +809,7 @@ namespace eval ukaz {
 			installhull using canvas
 			$self configurelist $args
 			bind $win <Configure> [mymethod RedrawRequest]
-			
+
 			# bindings for dragging & clicking
 			bind $win <ButtonPress-1> [mymethod drag start %x %y]
 			bind $win <Button1-Motion> [mymethod drag move %x %y]
@@ -817,7 +817,7 @@ namespace eval ukaz {
 			bind $win <ButtonRelease-2> [mymethod zoomout]
 			bind $win <ButtonRelease-3> [mymethod zoomout]
 			bind $win <Motion> [mymethod motionevent %x %y]
-			
+
 		}
 
 		destructor {
@@ -840,13 +840,13 @@ namespace eval ukaz {
 			defer [mymethod Redraw]
 			return {}
 		}
-		
+
 		#################### gnuplot style interface functions###########
 		method plot {data args} {
 			# main plot command
 			# simulate gnuplot
-			# syntax plot <data> 
-			#	?using usingspec? 
+			# syntax plot <data>
+			#	?using usingspec?
 			#	?with lines/points/linespoints?
 			#	?color colorspec?
 			#	?pointtype ...?
@@ -855,7 +855,7 @@ namespace eval ukaz {
 			#	?dash ...?
 			#	?title ...?
 			initparsearg
-			parsearg {using u} {} 
+			parsearg {using u} {}
 			parsearg {with w} points
 			parsearg {color lc} auto
 			parsearg {pointtype pt} circles
@@ -863,7 +863,7 @@ namespace eval ukaz {
 			parsearg {linewidth lw} 1.0
 			parsearg {dash} ""
 			parsearg {title t} ""
-		
+
 			if {$using != {}} {
 				set data [transformdata_using $data $using]
 			}
@@ -873,9 +873,9 @@ namespace eval ukaz {
 				set ncolors [llength $colors]
 				set color [lindex $colors [expr {$datasetnr%$ncolors}]]
 			}
-			
+
 			set datarange [calcdatarange $data]
-			
+
 			set plotwith {}
 
 			set id $datasetnr
@@ -895,12 +895,18 @@ namespace eval ukaz {
 					dict set plotwith lines 1
 				}
 
+				n -
+				none {
+					dict unset plotwith points
+					dict unset plotwith lines
+				}
+
 				default {
-					return -code error "with must be: points, lines or linespoints"
+					return -code error "with must be: points, lines, linespoints or none"
 				}
 			}
 
-			
+
 			if {[dict exists $plotwith points]} {
 				# check that pointtype exists
 				lassign [info commands shape-$pointtype] ptproc
@@ -925,13 +931,13 @@ namespace eval ukaz {
 			incr datasetnr
 			return $id
 		}
-		
+
 		method update {id args} {
 			# same as plot, but change existing dataset
 			if {![dict exists $plotdata $id]} {
 				return -code error "No such dataset: $id"
 			}
-			
+
 			initparsearg
 
 			if {[parsearg data NONE]} {
@@ -963,18 +969,24 @@ namespace eval ukaz {
 						dict set plotdata $id type points 1
 						dict set plotdata $id type lines 1
 					}
-				
+
+					n -
+					none {
+						dict unset plotdata $id type points
+						dict unset plotdata $id type lines
+					}
+
 					default {
-						return -code error "with must be: points, lines or linespoints"
+						return -code error "with must be: points, lines, linespoints or none"
 					}
 				}
 			}
-			
+
 			parsearg {color lc} auto
 			if {$color != "auto"} {
 				dict set plotdata $id color $color
 			}
-			
+
 			if {[parsearg {pointtype pt} {}]} {
 				dict set plotdata $id pointtype $pointtype
 			}
@@ -994,7 +1006,7 @@ namespace eval ukaz {
 			if {[parsearg {title t} {}]} {
 				dict set plotdata $id title $title
 			}
-			
+
 			$self RedrawRequest
 		}
 
@@ -1008,13 +1020,13 @@ namespace eval ukaz {
 				$self RedrawRequest
 			}
 		}
-		
+
 		method {set log} {{what xy} {how on}} {
 			# cast boolean how into canonical form 0,1
-			if {![string is boolean -strict $how]} { 
+			if {![string is boolean -strict $how]} {
 				return -code error "Expected boolean value instead of $how"
 			}
-			
+
 			if {$how} {
 				set how 1
 			} else {
@@ -1028,12 +1040,12 @@ namespace eval ukaz {
 					$self configure -logx $how
 					$self configure -logy $how
 				}
-				default { 
+				default {
 					return -code error "Unknown axis for log setting $what"
 				}
 			}
 		}
-		
+
 		method {unset log} {{what {}}} {
 			$self set log $what off
 		}
@@ -1045,22 +1057,22 @@ namespace eval ukaz {
 				# single string in gnuplot form - decompose at :
 				# after removal of [] (potentially)
 				set rangestring [lindex $arglist 0] ;# unpack
-				
+
 				if {[string trim $rangestring]=="auto"} { return [list * *] }
 
 				set arglist [split [string trim $rangestring {[]} ] :]
 			}
-		
+
 			if {[llength $arglist]==2} {
 				# argument is a Tcl list min max
 				lassign $arglist min max
-				
+
 				set min [string trim $min]
 				set max [string trim $max]
-				
+
 				if {$min == ""} { set min * }
 				if {$max == ""} { set max * }
-				
+
 				if {(!isfinite($min) && $min!="*") || (!isfinite($max) && $max !="*")} {
 					return -code error -level 2 "Range limits must be floats or *; got $min:$max"
 				}
@@ -1069,13 +1081,13 @@ namespace eval ukaz {
 			}
 
 			list $min $max
-		}	
-		
+		}
+
 		method {set xrange} {args} {
 			set options(-xrange) [rangeparse $args]
 			$self RedrawRequest
 		}
-		
+
 		method {set yrange} {args} {
 			set options(-yrange) [rangeparse $args]
 			$self RedrawRequest
@@ -1123,7 +1135,7 @@ namespace eval ukaz {
 			if {[llength $arglist]%2==1} {
 				return -code error -level 2 "Tic list must be label pos ?label pos ...?"
 			}
-			
+
 			# check for float value at every odd pos
 			foreach {text pos} $arglist {
 				if {!isfinite($pos)} {
@@ -1161,15 +1173,15 @@ namespace eval ukaz {
 				default { return -code error "Unknown axis $axis" }
 			}
 			switch [llength $args] {
-				0 { 
+				0 {
 					# restore default
-					set fmt %g 
+					set fmt %g
 				}
 				1 {
 					# one argument = "format" formatstring
 					set fmt [list numeric {*}$args]
 				}
-				2 { 
+				2 {
 					# two arguments = swap order for formatcmd
 					lassign $args fmtstring type
 					if {$type ni {command timedate numeric}} {
@@ -1197,11 +1209,11 @@ namespace eval ukaz {
 			# The value "outside-dummy" means "outside" but the option is only used to compute the right margin width for synchronized Bode plots
 			foreach arg $args {
 				switch $arg {
-					top   - 
+					top   -
 					bottom { dict set options(-key) vertical $arg }
 					right -
 					left  { dict set options(-key) horizontal $arg }
-					inside  - 
+					inside  -
 					outside  -
 					outside-dummy  { dict set options(-key) outside $arg }
 					on  { dict set options(-key) disabled false }
@@ -1211,8 +1223,8 @@ namespace eval ukaz {
 			}
 			$self RedrawRequest
 		}
-		
-		
+
+
 		proc parsemarkup {defaults args} {
 			initparsearg $defaults
 			parsearg {color lc} black
@@ -1231,7 +1243,7 @@ namespace eval ukaz {
 			errorargs
 
 			return [parsearg_asdict]
-			
+
 		}
 
 		method {set label} {args} {
@@ -1261,12 +1273,12 @@ namespace eval ukaz {
 			return $id
 
 		}
-		
+
 		method {highlight} {id dpnr args} {
 			#	?text ...?
 
 			initparsearg
-			
+
 			# update existing id. Fist check, if it exists
 			if {![dict exists $plotdata $id]} {
 				return -code error "Unknown dataset id $id"
@@ -1280,7 +1292,7 @@ namespace eval ukaz {
 
 			set ldata [parsemarkup $oldldata {*}$args]
 			dict set plotdata $id highlight $dpnr $ldata
-			
+
 			$self RedrawRequest
 			return $id
 
@@ -1311,19 +1323,20 @@ namespace eval ukaz {
 			# compute ranges spanned by data
 			set datarange {}
 			dict for {id data} $plotdata {
+				if {[dict get $data type] eq {}} { continue }
 				set datarange [combine_range $datarange [dict get $data datarange]]
 			}
-			
+
 			set dxmin [lindex [dict get $datarange xmin] $options(-logx) $options(-logy)]
 			set dxmax [lindex [dict get $datarange xmax] $options(-logx) $options(-logy)]
 			set dymin [lindex [dict get $datarange ymin] $options(-logx) $options(-logy)]
 			set dymax [lindex [dict get $datarange ymax] $options(-logx) $options(-logy)]
-			
+
 			# now compute range from request & data
 			set xwiden {min false max false}
 			set ywiden {min false max false}
 			lassign $options(-xrange) xmin xmax
-			lassign $options(-yrange) ymin ymax 
+			lassign $options(-yrange) ymin ymax
 			if {$xmin =="*" || ($options(-logx) && !islogfinite($xmin))} {
 				set xmin $dxmin
 				dict set xwiden min true
@@ -1362,7 +1375,7 @@ namespace eval ukaz {
 					lassign {-0.001 0.001} xmin xmax
 				}
 			}
-		
+
 			if {$ymin > $ymax} {
 				# not a single valid point
 				lassign {1.0 2.0} ymin ymax
@@ -1386,16 +1399,16 @@ namespace eval ukaz {
 			# compute ticlists and round for data determined values
 			lassign [compute_ticlist $xmin $xmax $options(-xtics) \
 				$options(-logx) $xwiden [formatcmd $options(-xformat)]] xticlist xmin xmax
-			
+
 			lassign [compute_ticlist $ymin $ymax $options(-ytics) \
 				$options(-logy) $ywiden [formatcmd $options(-yformat)]] yticlist ymin ymax
 
 			set displayrange [dict create xmin $xmin xmax $xmax ymin $ymin ymax $ymax]
-			
+
 		}
 
 		proc formatcmd {fmt} {
-			# return a cmd prefix to convert 
+			# return a cmd prefix to convert
 			# tic positions into strings
 			if {[llength $fmt]<=1} {
 				# single argument - use format
@@ -1410,7 +1423,7 @@ namespace eval ukaz {
 			}
 			error "Shit happens"
 		}
-		
+
 		method calcsize {} {
 			# compute size of the plot area in pixels
 			# such that it fits with all labels etc. into the canvas
@@ -1455,7 +1468,7 @@ namespace eval ukaz {
 			set deskxmin [expr {($lwidth+$options(-ticlength))+$margin}]
 			if { $options(-ylabel) != "" } {
 				set ylabelx [expr {$margin/2}]
-				set deskxmin [expr {$deskxmin + 1.2 * $lineheight}] 
+				set deskxmin [expr {$deskxmin + 1.2 * $lineheight}]
 			} else {
 				set ylabelx 0
 			}
@@ -1471,12 +1484,12 @@ namespace eval ukaz {
 					set deskxmax [expr {$deskxmax - $extramargin}]
 				}
 			}
-			
+
 			set deskymax [expr {max($options(-ticlength),$lascent)+$margin}]
 			set deskymin [expr {($h-$options(-ticlength)-$lineheight-$ldescent)-$margin}]
 			if { $options(-xlabel) != "" } {
 				set xlabely [expr {$deskymin+$margin/2}]
-				set deskymin [expr {$deskymin - 1.2 * $lineheight}] 
+				set deskymin [expr {$deskymin - 1.2 * $lineheight}]
 			} else {
 				set xlabely $deskymin
 			}
@@ -1503,26 +1516,26 @@ namespace eval ukaz {
 				set xmin [expr {log($xmin)}]
 				set xmax [expr {log($xmax)}]
 			}
-			
+
 			lassign [compute_rangetransform \
 					$xmin $xmax $dxmin $dxmax] xmul xadd
-			
+
 			if {$options(-logy)} {
 				set ymin [expr {log($ymin)}]
 				set ymax [expr {log($ymax)}]
 			}
-			
+
 			lassign [compute_rangetransform \
 					$ymin $ymax $dymin $dymax] ymul yadd
-			
+
 			set transform [list $xmul $xadd $ymul $yadd]
 		}
-	
+
 		method graph2pix {coords} {
 			# transform a list of coordinates to pixels
 			lassign $transform xmul xadd ymul yadd
 			set result {}
-			
+
 			set logcode {}
 			if {$options(-logx)} { append logcode x }
 			if {$options(-logy)} { append logcode y }
@@ -1556,7 +1569,7 @@ namespace eval ukaz {
 			}
 			return $result
 		}
-		
+
 		# convert a single value to/from graph coordinates
 		method xToPix {x} {
 			lassign $transform xmul xadd ymul yadd
@@ -1604,11 +1617,11 @@ namespace eval ukaz {
 
 		method drawdata {} {
 			foreach id $zstack {
-				# draw in correct order, dispatch between 
+				# draw in correct order, dispatch between
 				# lines and points
 				if {[dict exists $plotdata $id type points]} {
 					$self drawpoints $id
-				} 
+				}
 				if {[dict exists $plotdata $id type lines]} {
 					$self drawlines $id
 				}
@@ -1638,19 +1651,19 @@ namespace eval ukaz {
 				[dict get $plotdata $id dash]	\
 				$selfns
 		}
-	
+
 		method drawlines {id} {
 			set data [dict get $plotdata $id data]
 			set color [dict get $plotdata $id color]
 			set width [dict get $plotdata $id linewidth]
 			set dash [dict get $plotdata $id dash]
-		
+
 			set piece {}
 			set pieces {}
 			foreach {x y} $data {
-				if {isnan($x) || isnan($y)} { 
+				if {isnan($x) || isnan($y)} {
 					# NaN value, start a new piece
-					if {[llength $piece]>0} { 
+					if {[llength $piece]>0} {
 						lappend pieces [$self graph2pix $piece]
 					}
 					set piece {}
@@ -1682,7 +1695,7 @@ namespace eval ukaz {
 			}
 			return $ids
 		}
-		
+
 		method drawmarkuppoint {coords style} {
 			# draw a single label with text in a box
 			# and a data point symbol
@@ -1690,9 +1703,9 @@ namespace eval ukaz {
 			lassign [geometry::pointclip $coords $displayrange] clipdata clipinfo
 			set transdata [$self graph2pix $clipdata]
 			if {[llength $transdata] != 2} return
-			
+
 			lassign $transdata x y
-			
+
 			dict with style {
 				if {$text ne ""} {
 					set tid [$hull create text $x $y \
@@ -1704,12 +1717,12 @@ namespace eval ukaz {
 						set bbox [$hull bbox $tid]
 						# enlarge by padding
 						lassign $bbox x1 y1 x2 y2
-						
+
 						set x1o [expr {$x1-$padding}]
 						set x2o [expr {$x2+$padding}]
 						set y1o [expr {$y1-$padding}]
 						set y2o [expr {$y2+$padding}]
-							
+
 						$hull create rectangle $x1o $y1o $x2o $y2o \
 							-fill $boxcolor -outline $boxlinecolor -dash $boxdash \
 							-width $boxlinewidth -tag $selfns
@@ -1738,7 +1751,7 @@ namespace eval ukaz {
 				$self drawmarkuppoint [dict get $ldata data] $ldata
 			}
 		}
-		
+
 		method drawhighlight {id} {
 			set highlights [dict get $plotdata $id highlight]
 			set pdata [dict get $plotdata $id data]
@@ -1747,7 +1760,7 @@ namespace eval ukaz {
 				set xp [lindex $pdata [expr {2*$dpnr}]]
 				set yp [lindex $pdata [expr {2*$dpnr+1}]]
 				set coords [list $xp $yp]
-					
+
 				$self drawmarkuppoint $coords $ldata
 			}
 		}
@@ -1755,7 +1768,7 @@ namespace eval ukaz {
 
 		method drawlegend {} {
 			# check if legend is enabled
-			if {[dict get $options(-key) disabled]} { 
+			if {[dict get $options(-key) disabled]} {
 				return
 			}
 			# check if legend is dummy
@@ -1765,26 +1778,28 @@ namespace eval ukaz {
 			# draw the titles and a sample
 			set lineheight [expr {[font metrics $axisfont -linespace]*$options(-keyspacing)}]
 
-			# create list of all ids that have titles
+			# create list of all ids that have titles and a plot style
 			# in correct zstack order
 			set titleids {}
 			foreach id $zstack {
+				if {[dict get $plotdata $id type] eq {}} { continue }
+
 				if {[dict exists $plotdata $id title]} {
 					set title [dict get $plotdata $id title]
 					if {$title != ""} { lappend titleids $id }
 				}
 			}
 			# compute size needed for legend
-			
+
 			set dxmin [dict get $displaysize xmin]
 			set dymin [dict get $displaysize ymin]
 			set dxmax [dict get $displaysize xmax]
 			set dymax [dict get $displaysize ymax]
-			
+
 			set totalheight [expr {[llength $titleids]*$lineheight}]
 			set yoffset $lineheight ;# one line distance from border
 			set xoffset [expr {$options(-samplelength)/4}] ;# 1/4 length distance from border
-			
+
 			# y position of top sample
 			if {[dict get $options(-key) vertical]=="top"} {
 				set y0 [expr {$dymax+$yoffset}]
@@ -1812,7 +1827,7 @@ namespace eval ukaz {
 					set anchor e
 				}
 			} else {
-				# place key outside 
+				# place key outside
 				if {[dict get $options(-key) horizontal]=="left"} {
 					# outside left
 					set x0 [expr {$xoffset}]
@@ -1850,7 +1865,7 @@ namespace eval ukaz {
 							-width [dict get $plotdata $id linewidth] \
 							-dash [dict get $plotdata $id dash] -tag $selfns
 				}
-				
+
 				$hull create text $tx $ycur \
 					-anchor $anchor  \
 					-text $title -font $axisfont -tag $selfns
@@ -1870,19 +1885,19 @@ namespace eval ukaz {
 			# draw xtics
 			foreach {text xval} $xticlist {
 				set deskx [$self xToPix $xval]
-				if { $options(-grid) } { 
-					$hull create line $deskx $dymin $deskx $dymax -fill gray -tag $selfns	
+				if { $options(-grid) } {
+					$hull create line $deskx $dymin $deskx $dymax -fill gray -tag $selfns
 				}
 				$hull create line $deskx $dymin  $deskx [expr {$dymin+$options(-ticlength)}] -tag $selfns
 				$hull create text $deskx [expr {$dymin+$options(-ticlength)}] \
 					-anchor n -justify center \
 					-text $text -font $axisfont -tag $selfns
 			}
-			
+
 			# draw ytics
 			foreach {text yval} $yticlist {
 				set desky [$self yToPix $yval]
-				if { $options(-grid) } { 
+				if { $options(-grid) } {
 					$hull create line $dxmin $desky $dxmax $desky -fill gray -tag $selfns
 				}
 				$hull create line $dxmin $desky  [expr {$dxmin-$options(-ticlength)}] $desky -tag $selfns
@@ -1890,7 +1905,7 @@ namespace eval ukaz {
 					-anchor e -justify right \
 					-text $text -font $axisfont -tag $selfns
 			}
-		
+
 			# draw xlabel and ylabel
 			if {$options(-xlabel) != {}} {
 					set xcenter [expr {($dxmin + $dxmax) / 2}]
@@ -1918,7 +1933,7 @@ namespace eval ukaz {
 			$self calcranges
 			$self calcsize
 			$self calctransform
-			
+
 			# strange effect: after everything is deleted from the canvas
 			# font metrics takes 100x longer due to caching
 			$hull delete $selfns
@@ -1939,7 +1954,7 @@ namespace eval ukaz {
 
 			}
 		}
-		
+
 		method clear {} {
 			set plotdata {}
 			set labeldata {}
@@ -2049,13 +2064,13 @@ namespace eval ukaz {
 				# check for correct ordering
 				if {$x1 < $x0} { lassign [list $x0 $x1] x1 x0 }
 				if {$y1 < $y0} { lassign [list $y0 $y1] y1 y0 }
-				
+
 				if {$x0 != $x1 && $y0 != $y1} {
 					# zoom in!
 					$self zoomin [list $x0 $x1 $y0 $y1]
 				}
 			}
-			dict set dragdata dragging false 
+			dict set dragdata dragging false
 			dict set dragdata clicking false
 		}
 
@@ -2065,7 +2080,7 @@ namespace eval ukaz {
 			set ygraph [$self pixToY $y]
 			event generate $win <<MotionEvent>> -x $x -y $y -data [list $xgraph $ygraph]
 		}
-		
+
 		method pickpoint {x y {maxdist 5}} {
 			# identify point in dataset given by *screen coordinates* x,y
 			# maximum distance from center maxdist
@@ -2086,7 +2101,7 @@ namespace eval ukaz {
 						}
 						incr nr
 					}
-					
+
 					if {$mindistsq < $maxdistsq} {
 						# now compute the real datapointnr after clipping
 						set dpnr $minnr
@@ -2100,7 +2115,7 @@ namespace eval ukaz {
 						set xd [lindex $data [expr {$dpnr*2}]]
 						set yd [lindex $data [expr {$dpnr*2+1}]]
 
-						# short circuiting ensures the 1st, topmost point is returned 
+						# short circuiting ensures the 1st, topmost point is returned
 						return [list $id $dpnr $xd $yd]
 					}
 				}
@@ -2172,7 +2187,7 @@ namespace eval ukaz {
 		option -orient -default horizontal -configuremethod SetOrientation
 		option -variable -default {} -configuremethod SetVariable
 		option -color -default {gray}
-		
+
 		variable pos
 		variable canv {}
 		variable graph {}
@@ -2183,11 +2198,11 @@ namespace eval ukaz {
 
 		variable loopescape false
 		variable commandescape false
-		
+
 		constructor {args} {
 			$self configurelist $args
 		}
-		
+
 		destructor {
 			$self untrace
 			if { [info commands $canv] != {} } { $canv delete $selfns }
@@ -2206,19 +2221,19 @@ namespace eval ukaz {
 
 				set graph $parent
 				set canv $canvas
-				
+
 				$canv create line {-1 -1 -1 -1} -fill $options(-color) -dash . -tag $selfns
 				# Bindings for dragging
 				$canv bind $selfns <ButtonPress-1> [mymethod dragstart %x %y]
 				$canv bind $selfns <Motion> [mymethod dragmove %x %y]
 				$canv bind $selfns <ButtonRelease-1> [mymethod dragend %x %y]
-				
+
 				# Bindings for hovering - change cursor
 				$canv bind $selfns <Enter> [mymethod dragenter]
 				$canv bind $selfns <Leave> [mymethod dragleave]
-				
+
 				set dragging 0
-			
+
 			} else {
 				# this control was unmanaged. Remove our line
 				if {$canv != {} && [info commands $canv] != {}} {
@@ -2260,7 +2275,7 @@ namespace eval ukaz {
 				set options(-variable) {}
 			}
 		}
-		
+
 		method SetValue {args} {
 			if {$loopescape} {
 				set loopescape false
@@ -2290,7 +2305,7 @@ namespace eval ukaz {
 					set commandescape false
 				} else {
 					uplevel #0 [list {*}$options(-command) $pos]
-				}	
+				}
 			}
 		}
 
@@ -2305,7 +2320,7 @@ namespace eval ukaz {
 				}
 			}
 		}
-					
+
 		method dragenter {} {
 			if {!$dragging} {
 				$canv configure -cursor hand2
@@ -2348,7 +2363,7 @@ namespace eval ukaz {
 
 		method gotoCoords {x y} {
 			if {$graph=={}} { return }
-			
+
 			lassign [$graph graph2pix [list $x $y]] nx ny
 			if {$options(-orient)=="horizontal"} {
 				set pos $y
@@ -2368,7 +2383,7 @@ namespace eval ukaz {
 			$self GotoPixel $x $y
 		}
 	}
-	
+
 	# GUI control to define a region of interest (min/max)
 	snit::type dragregion {
 		variable dragging
@@ -2377,13 +2392,13 @@ namespace eval ukaz {
 		option -command -default {}
 		option -orient -default vertical -configuremethod SetOrientation
 		option -label -default {} -configuremethod SetOption
-		
+
 		option -minvariable -default {} -configuremethod SetVariable
 		option -maxvariable -default {} -configuremethod SetVariable
 
 		option -color -default {#FF3030} -configuremethod SetColor
 		option -fillcolor -default {#FFB0B0} -configuremethod SetOption
-		
+
 		variable pos {}
 		variable pixpos
 		variable pcenter
@@ -2396,15 +2411,15 @@ namespace eval ukaz {
 
 		variable loopescape false
 		variable commandescape false
-		
+
 		constructor {args} {
 			$self configurelist $args
 		}
-		
+
 		destructor {
 			$self untrace -minvariable
 			$self untrace -maxvariable
-			if { [info commands $canv] != {} } { 
+			if { [info commands $canv] != {} } {
 				$canv delete $selfns.min
 				$canv delete $selfns.max
 				$canv delete $selfns.region
@@ -2439,29 +2454,29 @@ namespace eval ukaz {
 				$canv create line {-1 -1 -1 -1} -fill $options(-color) -dash {6 4} -tag $selfns.max
 				$canv create rectangle -2 -2 -1 -1 -outline "" -fill $options(-fillcolor) -tag $selfns.region
 				$canv lower $selfns.region
-				
+
 				$canv create text {-2 -2} -text $options(-label) -fill $options(-color) -tag $selfns.text
 				if {$options(-orient) eq "vertical"} {
 					$canv itemconfigure $selfns.text -angle 90
 				}
-				
+
 				# Bindings for dragging
 				$canv bind $selfns.min <ButtonPress-1> [mymethod dragstart min %x %y]
 				$canv bind $selfns.min <Motion> [mymethod dragmove min %x %y]
 				$canv bind $selfns.min <ButtonRelease-1> [mymethod dragend min %x %y]
-				
+
 				$canv bind $selfns.max <ButtonPress-1> [mymethod dragstart max %x %y]
 				$canv bind $selfns.max <Motion> [mymethod dragmove max %x %y]
 				$canv bind $selfns.max <ButtonRelease-1> [mymethod dragend max %x %y]
-		
+
 				$canv bind $selfns.region <ButtonPress-1> [mymethod dragstart region %x %y]
 				$canv bind $selfns.region <Motion> [mymethod dragmove region %x %y]
 				$canv bind $selfns.region <ButtonRelease-1> [mymethod dragend region %x %y]
-				
+
 				$canv bind $selfns.text <ButtonPress-1> [mymethod dragstart region %x %y]
 				$canv bind $selfns.text <Motion> [mymethod dragmove region %x %y]
 				$canv bind $selfns.text <ButtonRelease-1> [mymethod dragend region %x %y]
-	
+
 				# Bindings for hovering - change cursor
 				$canv bind $selfns.min <Enter> [mymethod dragenter min]
 				$canv bind $selfns.min <Leave> [mymethod dragleave]
@@ -2469,10 +2484,10 @@ namespace eval ukaz {
 				$canv bind $selfns.max <Leave> [mymethod dragleave]
 				$canv bind $selfns.region <Enter> [mymethod dragenter region]
 				$canv bind $selfns.region <Leave> [mymethod dragleave]
-				
+
 				set dragging {}
 				set dragpos {}
-			
+
 			} else {
 				# this control was unmanaged. Remove our line
 				if {$canv != {} && [info commands $canv] != {}} {
@@ -2484,7 +2499,7 @@ namespace eval ukaz {
 		}
 
 		variable configured false
-		
+
 		method Configure {range} {
 			# the plot range has changed
 			set loopescape false
@@ -2516,9 +2531,9 @@ namespace eval ukaz {
 				upvar #0 $options($option) v
 				trace remove variable v write [mymethod SetValue]
 				set options($option) {}
-			}			
+			}
 		}
-		
+
 		method SetValue {args} {
 			if {$loopescape} {
 				set loopescape false
@@ -2550,7 +2565,7 @@ namespace eval ukaz {
 					set commandescape false
 				} else {
 					uplevel #0 [list {*}$options(-command) {*}$pos]
-				}	
+				}
 			}
 		}
 
@@ -2635,7 +2650,7 @@ namespace eval ukaz {
 
 			set vx [$graph pixToX $px]
 			set vy [$graph pixToY $py]
-			
+
 			if {$options(-orient) eq "horizontal"} {
 				if {$what eq "min"} {
 					set vmin $vy
@@ -2654,7 +2669,7 @@ namespace eval ukaz {
 				}
 
 			}
-			
+
 			set pcenter [expr {($pmin + $pmax)/2}]
 			set pixpos [list $pmin $pmax]
 			set pos [list $vmin $vmax]
@@ -2662,7 +2677,7 @@ namespace eval ukaz {
 			$self drawregion
 			$self DoTraces
 		}
-		
+
 		method gotoRel {pmin pmax} {
 			# move the region to the ratio p(min|max) of the graph on screen
 			set minx [expr {$xmin + ($xmax - $xmin)*$pmin}]
@@ -2703,7 +2718,7 @@ namespace eval ukaz {
 
 			lassign $pos vmin vmax
 			if {$vmin eq {} || $vmax eq {}} { return }
-			
+
 			lassign [$graph graph2pix [list $vmin $vmin]] nxmin nymin
 			lassign [$graph graph2pix [list $vmax $vmax]] nxmax nymax
 
@@ -2714,7 +2729,7 @@ namespace eval ukaz {
 				set pmin $nxmin
 				set pmax $nxmax
 			}
-			
+
 			set pcenter [expr {($pmin + $pmax)/2}]
 			set pixpos [list $pmin $pmax]
 			$self drawregion
@@ -2757,7 +2772,7 @@ namespace eval ukaz {
 		method getPosition {} {
 			return $pos
 		}
-	
+
 	}
 
 
@@ -2765,12 +2780,12 @@ namespace eval ukaz {
 		# determine, whether x,y is a valid point
 		expr {[string is double -strict $x] && $x < Inf && $x > -Inf}
 	}
-		
+
 	proc ::tcl::mathfunc::islogfinite {x} {
 		# determine, whether x,y is a valid point on the logscale
 		expr {[string is double -strict $x] && $x < Inf && $x > 0}
 	}
-	
+
 	proc ::tcl::mathfunc::isnan {x} {
 		expr {$x != $x}
 	}
