@@ -1315,6 +1315,25 @@ namespace eval ukaz {
 			}
 		}
 
+		method getstyle {id} {
+			# create a description of the style used for plot id
+			# in the form that can be passed to "plot" or "update"
+			set dset [dict get $plotdata $id]
+			set pt [dict exists $dset type points]
+			set lt [dict exists $dset type lines]
+			set result {}
+			dict set result with [dict get {00 none 10 points 01 lines 11 linespoints} $pt$lt]
+			dict set result color [dict get $dset color]
+			dict set result linewidth [dict get $dset linewidth]
+			dict set result dash [dict get $dset dash]
+			if {$pt} {
+				dict set result pointtype [dict get $dset pointtype]
+				dict set result pointsize [dict get $dset pointsize]
+			}
+			
+			return $result
+		}
+
 		method getdatasetids {} {
 			dict keys $plotdata
 		}
