@@ -1021,6 +1021,21 @@ namespace eval ukaz {
 			}
 		}
 
+		method raise {id} {
+			 if {[dict exists $plotdata $id]} {
+				 set zstack [lremove $zstack $id]
+				 lappend zstack $id
+				 $self RedrawRequest
+			}
+		}
+
+		method lower {id} {
+			 if {[dict exists $plotdata $id]} {
+				 set zstack [linsert [lremove $zstack $id] 0 $id]
+				 $self RedrawRequest
+			}
+		}
+
 		method {set log} {{what xy} {how on}} {
 			# cast boolean how into canonical form 0,1
 			if {![string is boolean -strict $how]} {
