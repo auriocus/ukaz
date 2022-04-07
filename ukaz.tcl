@@ -169,9 +169,9 @@ namespace eval ukaz {
 			variable ymax
 
 			expr {(($x<$xmin)?1:0) |
-				  (($x>$xmax)?2:0) |
-				  (($y<$ymin)?4:0) |
-				  (($y>$ymax)?8:0) }
+					(($x>$xmax)?2:0) |
+					(($y<$ymin)?4:0) |
+					(($y>$ymax)?8:0) }
 		}
 
 		proc intersect {x1 y1 x2 y2} {
@@ -425,10 +425,16 @@ namespace eval ukaz {
 			}
 
 			list {
-				# take the tics as they are
-				# list must be text, number,...
-				# don't widen
-				return [list $spec $min $max]
+				set ticlist {}
+				foreach v $spec {
+					if {[string is double -strict $v]} {
+						lappend ticlist [{*}$formatcmd $v] $v
+					} elseif {[llength $v]==2} {
+						lassign $v text pos
+						lappend ticlist [{*}$formatcmd $text] $pos
+					}
+				}
+				return [list $ticlist $min $max]
 			}
 
 			every {
@@ -1138,23 +1144,30 @@ namespace eval ukaz {
 				if {$sval=="auto" || $sval == "off"} {
 					return $sval
 				} else {
-					# try to parse as float
-					if {isfinite($val) && $val > 0} {
-						return [list every $val]
-					} else {
-						return -code error -level 2 "Tics must be float or \"auto\" or \"off\""
+					if {[llength $val]==1} {
+						# try to parse as float
+						if {isfinite($val) && $val > 0} {
+							return [list every $val]
+						} else {
+							return -code error -level 2 "Single value tics must be positive float or \"auto\" or \"off\""
+						}
 					}
 				}
 			}
 
-			if {[llength $arglist]%2==1} {
-				return -code error -level 2 "Tic list must be label pos ?label pos ...?"
-			}
-
 			# check for float value at every odd pos
-			foreach {text pos} $arglist {
-				if {!isfinite($pos)} {
-					return -code error -level 2 "All tics must be at finite position: \"$text\", $pos"
+			foreach val $arglist {
+				if {[llength $val]==1} {
+					if {!isfinite($pos)} {
+						return -code error -level 2 "Tics position must be float: $val"
+					}
+				} elseif {[llength $val]==2} {
+					lassign $val text pos
+					if {!isfinite($pos)} {
+						return -code error -level 2 "Tics position must be float: $val"
+					}
+				} else {
+					return -code error -level 2 "Tics sublists must consist of label and position: \{$val\}"
 				}
 			}
 
