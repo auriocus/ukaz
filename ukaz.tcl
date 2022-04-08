@@ -431,7 +431,7 @@ namespace eval ukaz {
 						lappend ticlist [{*}$formatcmd $v] $v
 					} elseif {[llength $v]==2} {
 						lassign $v text pos
-						lappend ticlist [{*}$formatcmd $text] $pos
+						lappend ticlist $text $pos
 					}
 				}
 				return [list $ticlist $min $max]
