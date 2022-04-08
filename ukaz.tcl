@@ -1158,7 +1158,7 @@ namespace eval ukaz {
 			# check for float value at every odd pos
 			foreach val $arglist {
 				if {[llength $val]==1} {
-					if {!isfinite($pos)} {
+					if {!isfinite($val)} {
 						return -code error -level 2 "Tics position must be float: $val"
 					}
 				} elseif {[llength $val]==2} {
