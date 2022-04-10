@@ -1027,21 +1027,6 @@ namespace eval ukaz {
 			}
 		}
 
-		method raise {id} {
-			 if {[dict exists $plotdata $id]} {
-				 set zstack [lremove $zstack $id]
-				 lappend zstack $id
-				 $self RedrawRequest
-			}
-		}
-
-		method lower {id} {
-			 if {[dict exists $plotdata $id]} {
-				 set zstack [linsert [lremove $zstack $id] 0 $id]
-				 $self RedrawRequest
-			}
-		}
-
 		method {set log} {{what xy} {how on}} {
 			# cast boolean how into canonical form 0,1
 			if {![string is boolean -strict $how]} {
@@ -1343,25 +1328,6 @@ namespace eval ukaz {
 			}
 		}
 
-		method getstyle {id} {
-			# create a description of the style used for plot id
-			# in the form that can be passed to "plot" or "update"
-			set dset [dict get $plotdata $id]
-			set pt [dict exists $dset type points]
-			set lt [dict exists $dset type lines]
-			set result {}
-			dict set result with [dict get {00 none 10 points 01 lines 11 linespoints} $pt$lt]
-			dict set result color [dict get $dset color]
-			dict set result linewidth [dict get $dset linewidth]
-			dict set result dash [dict get $dset dash]
-			if {$pt} {
-				dict set result pointtype [dict get $dset pointtype]
-				dict set result pointsize [dict get $dset pointsize]
-			}
-			
-			return $result
-		}
-
 		method getdatasetids {} {
 			dict keys $plotdata
 		}
@@ -1370,7 +1336,6 @@ namespace eval ukaz {
 			# compute ranges spanned by data
 			set datarange {}
 			dict for {id data} $plotdata {
-				if {[dict get $data type] eq {}} { continue }
 				set datarange [combine_range $datarange [dict get $data datarange]]
 			}
 
@@ -1595,6 +1560,7 @@ namespace eval ukaz {
 
 				x {
 					foreach {x y} $coords {
+						if {$y==""} {continue}
 						lappend result [expr {($x<=0)? -Inf*$xmul : log($x)*$xmul+$xadd}] \
 						[expr {$y*$ymul+$yadd}]
 					}
@@ -1829,8 +1795,9 @@ namespace eval ukaz {
 			# in correct zstack order
 			set titleids {}
 			foreach id $zstack {
-				if {[dict get $plotdata $id type] eq {}} { continue }
-
+				if {![dict exists $plotdata $id type points] && ![dict exists $plotdata $id type lines]} {
+					continue
+				}
 				if {[dict exists $plotdata $id title]} {
 					set title [dict get $plotdata $id title]
 					if {$title != ""} { lappend titleids $id }
@@ -2011,11 +1978,24 @@ namespace eval ukaz {
 		}
 
 		method fontset {option value} {
+			variable ns
+			if {![info exists $ns::fonts]} {
+				set $ns::fonts [list]
+			}
+			upvar $ns::fonts fonts
 			# when -font is set, create the font
 			# possibly delete the old one
+			# If font already exists, just use it
 
 			# let error propagate from here, before accepting the setting
-			set newfont [font create {*}$value]
+			if {$value in [font names]} {
+				set newfont $value
+			} else {
+				set newfont [font create {*}$value]
+				if {$newfont ni $fonts} {
+					lappend fonts $newfont
+				}
+			}
 
 			if {$options(-font) != {}} {
 				font delete $axisfont
