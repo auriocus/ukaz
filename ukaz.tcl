@@ -2011,11 +2011,24 @@ namespace eval ukaz {
 		}
 
 		method fontset {option value} {
+			variable ns
+			if {![info exists $ns::fonts]} {
+				set $ns::fonts [list]
+			}
+			upvar $ns::fonts fonts
 			# when -font is set, create the font
 			# possibly delete the old one
+			# If font already exists, just use it
 
 			# let error propagate from here, before accepting the setting
-			set newfont [font create {*}$value]
+			if {$value in [font names]} {
+				set newfont $value
+			} else {
+				set newfont [font create {*}$value]
+				if {$newfont ni $fonts} {
+					lappend fonts $newfont
+				}
+			}
 
 			if {$options(-font) != {}} {
 				font delete $axisfont
