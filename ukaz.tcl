@@ -459,8 +459,8 @@ namespace eval ukaz {
 						set minor {1}
 					}
 
-					set expmin [expr {int(floor(log10($min)))}]
-					set expmax [expr {int(floor(log10($max)))}]
+					set expmin [expr {entier(floor(log10($min)))}]
+					set expmax [expr {entier(floor(log10($max)))}]
 
 					# the range is between 10^expmin and 10^(expmax+1)
 
@@ -530,17 +530,17 @@ namespace eval ukaz {
 		# at integer multiples of ticbase
 		# if we should widen, update min & max
 		if {[dict get $widen min] && !$log} {
-			set start [expr {int(floor(double($min)/double($ticbase)))}]
+			set start [expr {entier(floor(double($min)/double($ticbase)))}]
 			set min [expr {$ticbase*$start}]
 		} else {
-			set start [expr {int(ceil(double($min)/double($ticbase)))}]
+			set start [expr {entier(ceil(double($min)/double($ticbase)))}]
 		}
 
 		if {[dict get $widen max]} {
-			set stop [expr {int(ceil(double($max)/double($ticbase)))}]
+			set stop [expr {entier(ceil(double($max)/double($ticbase)))}]
 			set max [expr {$ticbase*$stop}]
 		} else {
-			set stop [expr {int(floor(double($max)/double($ticbase)))}]
+			set stop [expr {entier(floor(double($max)/double($ticbase)))}]
 		}
 
 		set ticlist {}
