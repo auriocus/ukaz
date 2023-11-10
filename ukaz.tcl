@@ -238,6 +238,83 @@ namespace eval ukaz {
 		}
 	}
 
+	############## Functions for colormaps          ############################
+	
+	variable colormaps {}
+	proc mkcolormap {name map} {
+		# Create a colormap from a list of colors in float format with attached 
+		# gradient stops from 0 to 1.
+		#
+		# example: mkcolormap redgreen {0 {1.0 0.0 0.0} 1 {0.0 1.0 0.0} }
+		# The colormap is a long list of interpolated colors in hex format (#xxyyzz)
+		
+		variable colormaps
+		
+		if {[dict exists $colormaps $name]} {
+		   return -code error "Colormap $name already exists"
+		}
+
+		set maxcols 2000 ;# should be 2000 for real maps
+		set cmap {}
+		set map [lassign $map stop fcolor]
+		
+		if {$stop != 0} {
+			return -code error "First color must be at index 0.0"
+		}
+		
+		for {set i 0} {$i < $maxcols} {incr i} {
+			set frac [expr {double($i) / ($maxcols - 1)}]
+			if {($frac > $stop) || ($i == 0)} {
+				# advance
+				set oldstop $stop
+				set oldfcolor $fcolor
+				set map [lassign $map stop fcolor]
+			}
+
+			lappend cmap [interpol_color $oldstop $oldfcolor $stop $fcolor $frac]
+		}
+		
+		if {$stop != 1.0 } {
+			return -code error "Final color stop must be 1.0"
+		}
+
+		dict set colormaps $name $cmap
+	}
+
+	proc getcolor {map stop} {
+		set maplength [llength $map]
+		set index [expr {min(max(int($maplength*$stop), 0),$maplength - 1)}]
+		return [lindex $map $index]
+	}
+
+	proc interpol_color {x0 color0 x1 color1 frac} {
+		set w1 [expr {double($frac - $x0)/($x1 - $x0)}]
+		set w0 [expr {1.0 - $w1}]
+
+		foreach c0 $color0 c1 $color1 {
+			lappend fcolor [expr {$c0*$w0 + $c1*$w1}]
+		}
+
+		set icolor [lmap f $fcolor {expr {min(max(int($f*255), 0),255)}}]
+
+		set xcolor [join [lmap i $icolor {format %02x $i}] ""]
+		return "#$xcolor"
+	}
+		
+	proc testcolormap {name} {
+		variable colormaps
+		toplevel .ctest
+		set cmap [dict get $colormaps $name]
+
+		set width 400
+		set height 50
+		pack [canvas .ctest.c -width $width -height $height] -expand yes -fill both
+		for {set x 0} {$x < $width} {incr x} {
+			set frac [expr {double($x) / ($width - 1)}]
+			.ctest.c create rectangle $x 0 $x $height -outline {} -fill [getcolor $cmap $frac]
+		}
+	}
+	
 	############## Functions for deferred execution ############################
 	variable Requests {}
 	proc defer {cmd} {
