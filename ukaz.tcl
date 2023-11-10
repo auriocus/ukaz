@@ -287,6 +287,11 @@ namespace eval ukaz {
 		return [lindex $map $index]
 	}
 
+	proc getcolormap {name} {
+		variable colormaps
+		dict get $colormaps $name
+	}
+
 	proc interpol_color {x0 color0 x1 color1 frac} {
 		set w1 [expr {double($frac - $x0)/($x1 - $x0)}]
 		set w0 [expr {1.0 - $w1}]
@@ -304,6 +309,7 @@ namespace eval ukaz {
 	proc testcolormap {name} {
 		variable colormaps
 		toplevel .ctest
+		wm title .ctest "Colormap $name"
 		set cmap [dict get $colormaps $name]
 
 		set width 400
@@ -313,8 +319,37 @@ namespace eval ukaz {
 			set frac [expr {double($x) / ($width - 1)}]
 			.ctest.c create rectangle $x 0 $x $height -outline {} -fill [getcolor $cmap $frac]
 		}
+		tkwait window .ctest
 	}
 	
+	# add a few standard colormaps
+	
+	mkcolormap rgb {0 {1.0 0.0 0.0} 0.5 {0.0 1.0 0.0} 1.0 {0.0 0.0 1.0}}
+	
+	mkcolormap jet { 
+		0     { 0 0 0.5 }
+		0.125 { 0 0 1 }
+		0.325 { 0 1 1 }
+		0.625 { 1 1 0 }
+		0.875 { 1 0 0 }
+		1     { 0.5 0 0 }
+	}
+	
+	mkcolormap gray {0 {0 0 0}  1 {1 1 1}}
+
+	mkcolormap hot {
+		0 {0 0 0}
+		0.25 {1 0 0}
+		0.7 { 1 1 0}
+		1   { 1 1 1 }
+	}
+	
+	proc cutoff_log {x} {
+		# expr throws error if log is NaN
+		if {$x <= 0} { return -Inf }
+		return [expr {log($x)}]
+	}
+
 	############## Functions for deferred execution ############################
 	variable Requests {}
 	proc defer {cmd} {
@@ -431,7 +466,7 @@ namespace eval ukaz {
 	}
 
 	############## Functions for intervals ##################
-	proc calcdatarange {data}  {
+	proc calcdatarange {data zdata}  {
 		# compute min/max and corresponding log min/max
 		# for dataset
 		# unfortunately, four cases for log on/off must be considered
@@ -455,7 +490,23 @@ namespace eval ukaz {
 				}
 			}
 		}
-		dict create xmin $xmin ymin $ymin xmax $xmax ymax $ymax
+
+		# For z values, i.e. color code, finiteness is independent
+		# from x & y log values
+		set zmin {+Inf +Inf}
+		set zmax {-Inf -Inf}
+		
+		foreach z $zdata {
+			set zfin [list [expr {isfinite($z)}]  [expr {islogfinite($z)}]]
+			foreach logz {0 1} {
+				if {[lindex $zfin $logz]} {
+					if {$z<[lindex $zmin $logz]} { lset zmin $logz $z}
+					if {$z>[lindex $zmax $logz]} { lset zmax $logz $z}
+				}
+			}
+		}
+		
+		dict create xmin $xmin ymin $ymin xmax $xmax ymax $ymax zmin $zmin zmax $zmax
 	}
 
 	proc combine_range {range1 range2} {
@@ -482,7 +533,52 @@ namespace eval ukaz {
 			}
 			dict set result $key $l1
 		}
+
+		set l1 [dict get $range1 zmin]
+		set l2 [dict get $range2 zmin]
+		foreach logz {0 1} v1 $l1 v2 $l2 {
+			lset l1 $logz [expr {min($v1, $v2)}]
+		}
+		dict set result zmin $l1
+
+		set l1 [dict get $range1 zmax]
+		set l2 [dict get $range2 zmax]
+		foreach logz {0 1} v1 $l1 v2 $l2 {
+			lset l1 $logz [expr {max($v1, $v2)}]
+		}
+		dict set result zmax $l1
+			
 		return $result
+	}
+
+	proc sanitize_range {rmin rmax} {
+		# make a range with a finite span
+		if {$rmin > $rmax} {
+			# range contains not a single valid point
+			# just return a default
+			lassign {0.0 1.0} rmin rmax
+		}
+
+		if {$rmin == $rmax} {
+			# range contains only one single point
+			# expand range by a small width
+			set rm $rmin
+			if {$rm != 0} {
+				# if it is a finite number, make a range 
+				# with a relative size of +/- 0.1 %
+				set rmin [expr {$rm*0.999}]
+				set rmax [expr {$rm*1.001}]
+				if {$rm < 0} {
+					lassign [list $rmin $rmax] rmax rmin
+				}
+			} else {
+				# if the only valid number is 0 
+				# make a fixed range
+				lassign {-0.001 0.001} rmin rmax
+			}
+		}
+
+		return [list $rmin $rmax]
 	}
 
 	proc compute_rangetransform {r1min r1max r2min r2max} {
@@ -723,11 +819,11 @@ namespace eval ukaz {
 		return $ids
 	}
 
-	proc shape-filled-squares {can coord color size width dash tag} {
-		set s [expr {5.0*$size}]
+	proc shape-filled-squares {can coord color size width dash tag {varying {}}} {
 		set ids {}
-		foreach {x y} $coord {
-		lappend ids [$can create rectangle  \
+		foreach {x y} $coord {*}$varying {
+			set s [expr {5.0*$size}]
+			lappend ids [$can create rectangle  \
 				[expr {$x-$s}] [expr {$y-$s}] [expr {$x+$s}] [expr {$y+$s}] \
 				-outline "" -fill $color -tag $tag]
 		}
@@ -838,15 +934,19 @@ namespace eval ukaz {
 
 		option -xrange -default {* *} -configuremethod rangeset
 		option -yrange -default {* *} -configuremethod rangeset
+		option -zrange -default {* *} -configuremethod rangeset
 		option -logx -default 0 -configuremethod opset
 		option -logy -default 0 -configuremethod opset
+		option -logz -default 0 -configuremethod opset
 		option -grid -default false -configuremethod opset
 		option -xtics -default auto -configuremethod opset
 		option -ytics -default auto -configuremethod opset
+		option -ztics -default auto -configuremethod opset
 		option -xlabel -default {} -configuremethod opset
 		option -ylabel -default {} -configuremethod opset
 		option -xformat -default %g -configuremethod opset
 		option -yformat -default %g -configuremethod opset
+		option -zformat -default %g -configuremethod opset
 		option -font -default {} -configuremethod fontset
 		option -ticlength -default 5
 		option -samplelength -default 20
@@ -869,6 +969,7 @@ namespace eval ukaz {
 		# computed list of tics and displayrange
 		variable xticlist
 		variable yticlist
+		variable zticlist
 		variable displayrange
 		variable displaysize
 
@@ -880,7 +981,7 @@ namespace eval ukaz {
 		variable dragdata {dragging false clicking false}
 
 		# identity transform
-		variable transform {1.0 0.0 1.0 0.0}
+		variable transform {1.0 0.0 1.0 0.0 1.0 0.0}
 
 		variable axisfont default
 		variable labelfont default
@@ -946,6 +1047,9 @@ namespace eval ukaz {
 			parsearg {linewidth lw} 1.0
 			parsearg {dash} ""
 			parsearg {title t} ""
+			parsearg {varying} {}
+			parsearg {colormap} "jet"
+			parsearg {zdata} {}
 
 			if {$using != {}} {
 				set data [transformdata_using $data $using]
@@ -957,7 +1061,7 @@ namespace eval ukaz {
 				set color [lindex $colors [expr {$datasetnr%$ncolors}]]
 			}
 
-			set datarange [calcdatarange $data]
+			set datarange [calcdatarange $data $zdata]
 
 			set plotwith {}
 
@@ -1008,6 +1112,9 @@ namespace eval ukaz {
 			#
 			dict set plotdata $id linewidth $linewidth
 			dict set plotdata $id dash $dash
+			dict set plotdata $id varying $varying
+			dict set plotdata $id colormap $colormap
+			dict set plotdata $id zdata $zdata
 
 			lappend zstack $id
 			$self RedrawRequest
@@ -1023,13 +1130,34 @@ namespace eval ukaz {
 
 			initparsearg
 
+			# check if new data was received
+			# either by setting data or zdata
+			set newdata false
+			set newzdata false
 			if {[parsearg data NONE]} {
 				# new data was supplied. Only then check for transformation
 				if {[parsearg {using u} {}]} {
 					set data [transformdata_using $data $using]
 				}
-				set datarange [calcdatarange $data]
+				set newdata true
+			}
+
+			if {[parsearg zdata NONE]} {
+				set newzdata true
+			}
+
+			if {$newdata || $newzdata} {
+				if {!$newzdata} {
+					set zdata [dict get $plotdata $id zdata]
+				}
+				
+				if {!$newdata} {
+					set data [dict get $plotdata $id data]
+				}
+
+				set datarange [calcdatarange $data $zdata]
 				dict set plotdata $id data $data
+				dict set plotdata $id zdata $zdata
 				dict set plotdata $id datarange $datarange
 			}
 
@@ -1070,24 +1198,18 @@ namespace eval ukaz {
 				dict set plotdata $id color $color
 			}
 
-			if {[parsearg {pointtype pt} {}]} {
-				dict set plotdata $id pointtype $pointtype
-			}
-
-			if {[parsearg {pointsize ps} {}]} {
-				dict set plotdata $id pointsize $pointsize
-			}
-
-			if {[parsearg {linewidth lw} {}]} {
-				dict set plotdata $id linewidth $linewidth
-			}
-
-			if {[parsearg {dash} {}]} {
-				dict set plotdata $id dash $dash
-			}
-
-			if {[parsearg {title t} {}]} {
-				dict set plotdata $id title $title
+			foreach {option property} {
+				{varying} varying
+				{colormap} colormap
+				{pointtype pt} pointtype
+				{pointsize ps} pointsize
+				{linewidth lw} linewidth
+				{dash} dash
+				{title t} title
+			} {
+				if {[parsearg $option {}]} {
+					dict set plotdata $id $property [set $property]
+				}
 			}
 
 			$self RedrawRequest
@@ -1138,6 +1260,7 @@ namespace eval ukaz {
 					$self configure -logx $how
 					$self configure -logy $how
 				}
+				z  { $self configure -logz $how }
 				default {
 					return -code error "Unknown axis for log setting $what"
 				}
@@ -1190,6 +1313,11 @@ namespace eval ukaz {
 			set options(-yrange) [rangeparse $args]
 			$self RedrawRequest
 		}
+		
+		method {set zrange} {args} {
+			set options(-zrange) [rangeparse $args]
+			$self RedrawRequest
+		}
 
 		method {set auto x} {} {
 			$self set xrange *:*
@@ -1197,6 +1325,10 @@ namespace eval ukaz {
 
 		method {set auto y} {} {
 			$self set yrange *:*
+		}
+
+		method {set auto z} {} {
+			$self set zrange *:*
 		}
 
 		method {set grid} {{how on}} {
@@ -1275,6 +1407,7 @@ namespace eval ukaz {
 			switch $axis {
 				x  { upvar 0 options(-xformat) fmtvar }
 				y  { upvar 0 options(-yformat) fmtvar }
+				z  { upvar 0 options(-zformat) fmtvar }
 				default { return -code error "Unknown axis $axis" }
 			}
 			switch [llength $args] {
@@ -1442,7 +1575,7 @@ namespace eval ukaz {
 		method getdatasetids {} {
 			dict keys $plotdata
 		}
-
+		
 		method calcranges {} {
 			# compute ranges spanned by data
 			set datarange {}
@@ -1455,70 +1588,53 @@ namespace eval ukaz {
 			set dxmax [lindex [dict get $datarange xmax] $options(-logx) $options(-logy)]
 			set dymin [lindex [dict get $datarange ymin] $options(-logx) $options(-logy)]
 			set dymax [lindex [dict get $datarange ymax] $options(-logx) $options(-logy)]
+			set dzmin [lindex [dict get $datarange zmin] $options(-logz)]
+			set dzmax [lindex [dict get $datarange zmax] $options(-logz)]
 
 			# now compute range from request & data
 			set xwiden {min false max false}
 			set ywiden {min false max false}
+			set zwiden {min false max false}
 			lassign $options(-xrange) xmin xmax
 			lassign $options(-yrange) ymin ymax
+			lassign $options(-zrange) zmin zmax
+
 			if {$xmin =="*" || ($options(-logx) && !islogfinite($xmin))} {
 				set xmin $dxmin
 				dict set xwiden min true
 			}
+
 			if {$ymin =="*" || ($options(-logy) && !islogfinite($ymin))} {
 				set ymin $dymin
 				dict set ywiden min true
 			}
+
+			if {$zmin =="*" || ($options(-logz) && !islogfinite($zmin))} {
+				set zmin $dzmin
+				dict set zwiden min true
+			}
+
 			if {$xmax =="*" || ($options(-logx) && !islogfinite($xmax))} {
 				set xmax $dxmax
 				dict set xwiden max true
 			}
+
 			if {$ymax =="*" || ($options(-logy) && !islogfinite($ymax))} {
 				set ymax $dymax
 				dict set ywiden max true
 			}
 
+			if {$zmax =="*" || ($options(-logz) && !islogfinite($zmax))} {
+				set zmax $dzmax
+				dict set zwiden max true
+			}
+
 			# now, we could still have an unusable range in case the data
-			# doesn't provide us with a sensible range; then fake it
-
-			if {$xmin > $xmax} {
-				# not a single valid point
-				lassign {1.0 2.0} xmin xmax
-			}
-
-			if {$xmin == $xmax} {
-				# only one value
-				set xm $xmin
-				if {$xm != 0} {
-					set xmin [expr {$xm*0.999}]
-					set xmax [expr {$xm*1.001}]
-					if {$xm < 0} {
-						lassign [list $xmin $xmax] xmax xmin
-					}
-				} else {
-					lassign {-0.001 0.001} xmin xmax
-				}
-			}
-
-			if {$ymin > $ymax} {
-				# not a single valid point
-				lassign {1.0 2.0} ymin ymax
-			}
-
-			if {$ymin == $ymax} {
-				# only one value
-				set ym $ymin
-				if {$ym != 0} {
-					set ymin [expr {$ym*0.999}]
-					set ymax [expr {$ym*1.001}]
-					if {$ym < 0} {
-						lassign [list $ymin $ymax] ymax ymin
-					}
-				} else {
-					lassign {-0.001 0.001} ymin ymax
-				}
-			}
-
+			# doesn't provide us with a sensible range
+			lassign [sanitize_range $xmin $xmax] xmin xmax
+			lassign [sanitize_range $ymin $ymax] ymin ymax
+			lassign [sanitize_range $zmin $zmax] zmin zmax
+			
 			# now we have the tight range in xmin,xmax, ymin, ymax
 			# compute ticlists and round for data determined values
 			lassign [compute_ticlist $xmin $xmax $options(-xtics) \
@@ -1527,7 +1643,10 @@ namespace eval ukaz {
 			lassign [compute_ticlist $ymin $ymax $options(-ytics) \
 				$options(-logy) $ywiden [formatcmd $options(-yformat)]] yticlist ymin ymax
 
-			set displayrange [dict create xmin $xmin xmax $xmax ymin $ymin ymax $ymax]
+			lassign [compute_ticlist $zmin $zmax $options(-ztics) \
+				$options(-logz) $zwiden [formatcmd $options(-zformat)]] zticlist zmin zmax
+
+			set displayrange [dict create xmin $xmin xmax $xmax ymin $ymin ymax $ymax zmin $zmin zmax $zmax]
 
 		}
 
@@ -1630,6 +1749,8 @@ namespace eval ukaz {
 			set xmax [dict get $displayrange xmax]
 			set ymin [dict get $displayrange ymin]
 			set ymax [dict get $displayrange ymax]
+			set zmin [dict get $displayrange zmin]
+			set zmax [dict get $displayrange zmax]
 
 			set dxmin [dict get $displaysize xmin]
 			set dxmax [dict get $displaysize xmax]
@@ -1637,22 +1758,31 @@ namespace eval ukaz {
 			set dymax [dict get $displaysize ymax]
 
 			if {$options(-logx)} {
-				set xmin [expr {log($xmin)}]
-				set xmax [expr {log($xmax)}]
+				set xmin [cutoff_log $xmin]
+				set xmax [cutoff_log $xmax]
 			}
 
 			lassign [compute_rangetransform \
 					$xmin $xmax $dxmin $dxmax] xmul xadd
 
 			if {$options(-logy)} {
-				set ymin [expr {log($ymin)}]
-				set ymax [expr {log($ymax)}]
+				set ymin [cutoff_log $ymin]
+				set ymax [cutoff_log $ymax]
 			}
 
 			lassign [compute_rangetransform \
 					$ymin $ymax $dymin $dymax] ymul yadd
 
-			set transform [list $xmul $xadd $ymul $yadd]
+			if {$options(-logz)} {
+				set zmin [cutoff_log $zmin]
+				set zmax [cutoff_log $zmax]
+			}
+
+			# color gradients are normalized from 0 to 1
+			lassign [compute_rangetransform \
+					$zmin $zmax 0.0 1.0] zmul zadd
+
+			set transform [list $xmul $xadd $ymul $yadd $zmul $zadd]
 		}
 
 		method graph2pix {coords} {
@@ -1692,6 +1822,19 @@ namespace eval ukaz {
 				}
 			}
 			return $result
+		}
+		
+		method ztocolor {zvalues name} {
+			lassign $transform xmul xadd ymul yadd zmul zadd
+			set map [getcolormap $name]
+
+			if {$options(-logz)} {
+				return [lmap z $zvalues \
+					{getcolor $map [expr {($z<=0)? -Inf*$zmul : log($z)*$zmul+$zadd}]}]
+			} else {
+				return [lmap z $zvalues \
+					{getcolor $map [expr {$z*$zmul+$zadd}]}]
+			}
 		}
 
 		# convert a single value to/from graph coordinates
@@ -1768,12 +1911,20 @@ namespace eval ukaz {
 			dict set plotdata $id transdata $transdata
 
 			set shapeproc shape-[dict get $plotdata $id pointtype]
+			
+			set varying {}
+			if {[dict get $plotdata $id varying] == "color"} {
+				set varying color
+				lappend varying [$self ztocolor [dict get $plotdata $id zdata] [dict get $plotdata $id colormap]]
+			}
+
 			$shapeproc $hull $transdata \
 				[dict get $plotdata $id color] \
 				[dict get $plotdata $id pointsize]	\
 				[dict get $plotdata $id linewidth]	\
 				[dict get $plotdata $id dash]	\
-				$selfns
+				$selfns \
+			    $varying
 		}
 
 		method drawlines {id} {
