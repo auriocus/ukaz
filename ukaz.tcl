@@ -216,6 +216,32 @@ namespace eval ukaz {
 			expr { ($x!=$x) || ($y != $y) || (abs($x) == Inf && abs($y) == Inf)}
 		}
 
+		proc pointclipz {cdata zdata range} {
+			# remove all points which are NaN or outside
+			# the clip region
+			set xmin [dict get $range xmin]
+			set xmax [dict get $range xmax]
+			set ymin [dict get $range ymin]
+			set ymax [dict get $range ymax]
+			set zmin [dict get $range zmin]
+			set zmax [dict get $range zmax]
+			
+			set result {}
+			set resultz {}
+			set clipinfo {}
+			set clipid 0
+			foreach {x y} $cdata z $zdata {
+				if {$x!=$x || $y!=$y || $x<$xmin || $x>$xmax || $y<$ymin || $y>$ymax || $z!=$z || $z > $zmax || $z < $zmin} {
+					dict incr clipinfo $clipid
+					continue
+				}
+				lappend result $x $y
+				lappend resultz $z
+				incr clipid
+			}
+			list $result $resultz $clipinfo
+		}
+		
 		proc pointclip {cdata range} {
 			# remove all points which are NaN or outside
 			# the clip region
@@ -784,10 +810,10 @@ namespace eval ukaz {
 	}
 
 	########### Functions for drawing marks on a canvas ##############
-	proc shape-circles {can coord color size width dash tag} {
-		set r [expr {5.0*$size}]
+	proc shape-circles {can coord color size width dash varying tag} {
 		set ids {}
-		foreach {x y} $coord {
+		foreach {x y} $coord {*}$varying {
+			set r [expr {5.0*$size}]
 			lappend ids [$can create oval \
 				[expr {$x-$r}] [expr {$y-$r}] \
 				[expr {$x+$r}] [expr {$y+$r}] \
@@ -796,10 +822,10 @@ namespace eval ukaz {
 		return $ids
 	}
 
-	proc shape-filled-circles {can coord color size width dash tag} {
-		set r [expr {5.0*$size}]
+	proc shape-filled-circles {can coord color size width dash varying tag} {
 		set ids {}
-		foreach {x y} $coord {
+		foreach {x y} $coord {*}$varying {
+			set r [expr {5.0*$size}]
 			lappend ids [$can create oval \
 				[expr {$x-$r}] [expr {$y-$r}] \
 				[expr {$x+$r}] [expr {$y+$r}] \
@@ -808,18 +834,18 @@ namespace eval ukaz {
 		return $ids
 	}
 
-	proc shape-squares {can coord color size width dash tag} {
-		set s [expr {5.0*$size}]
+	proc shape-squares {can coord color size width dash varying tag} {
 		set ids {}
-		foreach {x y} $coord {
-		lappend ids [$can create rectangle  \
+		foreach {x y} $coord {*}$varying {
+			set s [expr {5.0*$size}]
+			lappend ids [$can create rectangle  \
 				[expr {$x-$s}] [expr {$y-$s}] [expr {$x+$s}] [expr {$y+$s}] \
 				-outline $color -fill "" -width $width -dash $dash -tag $tag]
 		}
 		return $ids
 	}
 
-	proc shape-filled-squares {can coord color size width dash tag {varying {}}} {
+	proc shape-filled-squares {can coord color size width dash varying tag} {
 		set ids {}
 		foreach {x y} $coord {*}$varying {
 			set s [expr {5.0*$size}]
@@ -831,11 +857,11 @@ namespace eval ukaz {
 	}
 
 
-	proc shape-hexagons {can coord color size width dash tag} {
-		set s [expr {5.0*$size}]
+	proc shape-hexagons {can coord color size width dash varying tag} {
 		set clist {1 -0.5 0 -1.12 -1 -0.5 -1 0.5 0 1.12 1 0.5}
 		set ids {}
-		foreach {x y} $coord {
+		foreach {x y} $coord {*}$varying {
+			set s [expr {5.0*$size}]
 			set hc {}
 			foreach {xc yc} $clist {
 				lappend hc [expr {$xc*$s+$x}]
@@ -847,11 +873,11 @@ namespace eval ukaz {
 		return $ids
 	}
 
-	proc shape-filled-hexagons {can coord color size width dash tag} {
-		set s [expr {5.0*$size}]
+	proc shape-filled-hexagons {can coord color size width dash varying tag} {
 		set clist {1 -0.5 0 -1.12 -1 -0.5 -1 0.5 0 1.12 1 0.5}
 		set ids {}
-		foreach {x y} $coord {
+		foreach {x y} $coord {*}$varying {
+			set s [expr {5.0*$size}]
 			set hc {}
 			foreach {xc yc} $clist {
 				lappend hc [expr {$xc*$s+$x}]
@@ -863,11 +889,11 @@ namespace eval ukaz {
 		return $ids
 	}
 
-	proc shape-triangles {can coord color size width dash tag} {
-		set s [expr {8.0*$size}]
+	proc shape-triangles {can coord color size width dash varying tag} {
 		set clist {0.0 +1.0 0.5 -0.5 -0.5 -0.5}
 		set ids {}
-		foreach {x y} $coord {
+		foreach {x y} $coord {*}$varying {
+			set s [expr {8.0*$size}]
 			set hc {}
 			foreach {xc yc} $clist {
 				lappend hc [expr {$xc*$s+$x}]
@@ -879,11 +905,11 @@ namespace eval ukaz {
 		return $ids
 	}
 
-	proc shape-filled-triangles {can coord color size width dash tag} {
-		set s [expr {8.0*$size}]
+	proc shape-filled-triangles {can coord color size width dash varying tag} {
 		set clist {0.0 +1.0 0.5 -0.5 -0.5 -0.5}
 		set ids {}
-		foreach {x y} $coord {
+		foreach {x y} $coord {*}$varying {
+			set s [expr {8.0*$size}]
 			set hc {}
 			foreach {xc yc} $clist {
 				lappend hc [expr {$xc*$s+$x}]
@@ -895,11 +921,11 @@ namespace eval ukaz {
 		return $ids
 	}
 
-	proc shape-uptriangles {can coord color size width dash tag} {
-		set s [expr {8.0*$size}]
+	proc shape-uptriangles {can coord color size width dash varying tag} {
 		set clist {0.0 -1.0 0.5 0.5 -0.5 0.5}
 		set ids {}
-		foreach {x y} $coord {
+		foreach {x y} $coord {*}$varying {
+			set s [expr {8.0*$size}]
 			set hc {}
 			foreach {xc yc} $clist {
 				lappend hc [expr {$xc*$s+$x}]
@@ -911,11 +937,11 @@ namespace eval ukaz {
 		return $ids
 	}
 
-	proc shape-filled-uptriangles {can coord color size width dash tag} {
-		set s [expr {8.0*$size}]
+	proc shape-filled-uptriangles {can coord color size width dash varying tag} {
 		set clist {0.0 -1.0 0.5 0.5 -0.5 0.5}
 		set ids {}
-		foreach {x y} $coord {
+		foreach {x y} $coord {*}$varying {
+			set s [expr {8.0*$size}]
 			set hc {}
 			foreach {xc yc} $clist {
 				lappend hc [expr {$xc*$s+$x}]
@@ -1902,7 +1928,16 @@ namespace eval ukaz {
 
 		method drawpoints {id} {
 			set data [dict get $plotdata $id data]
-			lassign [geometry::pointclip $data $displayrange] clipdata clipinfo
+			
+			if {[dict get $plotdata $id varying] == "color"} {
+ 				set zdata [dict get $plotdata $id zdata]
+				lassign [geometry::pointclipz $data $zdata $displayrange] clipdata clipzdata clipinfo
+				set colorcode true
+			} else {
+				lassign [geometry::pointclip $data $displayrange] clipdata clipinfo
+				set colorcode false
+			}
+			
 			# store away the clipped & transformed data
 			# together with the info of the clipping
 			# needed for picking points
@@ -1912,19 +1947,20 @@ namespace eval ukaz {
 
 			set shapeproc shape-[dict get $plotdata $id pointtype]
 			
-			set varying {}
-			if {[dict get $plotdata $id varying] == "color"} {
+			if {$colorcode} {
 				set varying color
-				lappend varying [$self ztocolor [dict get $plotdata $id zdata] [dict get $plotdata $id colormap]]
+				lappend varying [$self ztocolor $clipzdata [dict get $plotdata $id colormap]]
+			} else {
+				set varying {}
 			}
-
+			
 			$shapeproc $hull $transdata \
 				[dict get $plotdata $id color] \
 				[dict get $plotdata $id pointsize]	\
 				[dict get $plotdata $id linewidth]	\
 				[dict get $plotdata $id dash]	\
-				$selfns \
-			    $varying
+			    $varying \
+				$selfns
 		}
 
 		method drawlines {id} {
@@ -2014,7 +2050,7 @@ namespace eval ukaz {
 						$pointsize	\
 						$linewidth	\
 						$dash \
-						$selfns
+						{} $selfns
 				}
 
 			}
@@ -2131,7 +2167,7 @@ namespace eval ukaz {
 						[dict get $plotdata $id pointsize]	\
 						[dict get $plotdata $id linewidth]	\
 						[dict get $plotdata $id dash]	\
-						$selfns
+						{} $selfns
 				}
 
 				if {[dict exists $plotdata $id type lines]} {
