@@ -231,7 +231,7 @@ namespace eval ukaz {
 			set clipinfo {}
 			set clipid 0
 			foreach {x y} $cdata z $zdata {
-				if {$x!=$x || $y!=$y || $x<$xmin || $x>$xmax || $y<$ymin || $y>$ymax || $z!=$z || $z > $zmax || $z < $zmin} {
+				if {$x!=$x || $y!=$y || $x<$xmin || $x>$xmax || $y<$ymin || $y>$ymax || $z!=$z} {
 					dict incr clipinfo $clipid
 					continue
 				}
@@ -262,6 +262,7 @@ namespace eval ukaz {
 			}
 			list $result $clipinfo
 		}
+
 	}
 
 	############## Functions for colormaps          ############################
@@ -309,6 +310,9 @@ namespace eval ukaz {
 
 	proc getcolor {map stop} {
 		set maplength [llength $map]
+		if {$stop > 1} { return [lindex $map end] }
+		if {$stop < 0} { return [lindex $map 0] }
+		
 		set index [expr {min(max(int($maplength*$stop), 0),$maplength - 1)}]
 		return [lindex $map $index]
 	}
@@ -374,6 +378,60 @@ namespace eval ukaz {
 		# expr throws error if log is NaN
 		if {$x <= 0} { return -Inf }
 		return [expr {log($x)}]
+	}
+
+	proc clipvalue {v min max} {
+		expr {max(min($v, $max),$min)}
+	}
+	
+	proc compute_rasterpixelsize {coords {overprint 1.1}} {
+		# sort by y coordinate, then by x 
+		# since sort is stable, it remains 
+		# sorted for equal x. then count, how often the 
+		# direction of the minor coordinate changes
+		#
+		# first filter NaNs
+		set fdata {}
+		foreach {x y} $coords {
+			if {$x != $x || $y != $y} { continue }
+			lappend fdata $x $y
+		}
+
+ 		set sydata [lsort -stride 2 -real -index 1 $fdata]
+		set sxdata [lsort -stride 2 -real -index 0 $sydata]
+		
+		set xmin [lindex $sxdata 0]
+		set xmax [lindex $sxdata end-1]
+		set ymin [lindex $sydata 1]
+		set ymax [lindex $sydata end]
+
+		puts "$xmin < x < $xmax, $ymin < y < $ymax"
+
+		set N [expr {[llength $fdata]/2}]
+		set dirchange 0
+		set oldy [lindex $sxdata 0 1]
+
+		# count direction changes
+		foreach {x y} $sxdata {
+			if {$y < $oldy} { incr dirchange }
+			set oldy $y
+		}
+
+		puts "$dirchange direction changes found"
+		
+		if {$dirchange > $N/2} {
+			set dirchange [expr {$N - $dirchange}]
+		}
+
+		set Nx [expr {$dirchange + 1}]
+		set Ny [expr {max($N/ $Nx, 1)}]
+		
+		puts "Assuming $Nx x $Ny raster"
+
+		set xsize [expr {double($xmax - $xmin)/max($Nx-1,1)*$overprint}] 
+		set ysize [expr {double($ymax - $ymin)/max($Ny-1,1)*$overprint}]
+
+		return [list $xsize $ysize]	
 	}
 
 	############## Functions for deferred execution ############################
@@ -582,7 +640,7 @@ namespace eval ukaz {
 		if {$rmin > $rmax} {
 			# range contains not a single valid point
 			# just return a default
-			lassign {0.0 1.0} rmin rmax
+			lassign {1.0 2.0} rmin rmax
 		}
 
 		if {$rmin == $rmax} {
@@ -952,7 +1010,7 @@ namespace eval ukaz {
 		}
 		return $ids
 	}
-
+	
 	snit::widgetadaptor graph {
 		delegate option -width to hull
 		delegate option -height to hull
@@ -1114,8 +1172,12 @@ namespace eval ukaz {
 					dict unset plotwith lines
 				}
 
+				raster {
+					dict set plotwith raster 1
+				}
+
 				default {
-					return -code error "with must be: points, lines, linespoints or none"
+					return -code error "with must be: points, lines, linespoints, raster or none"
 				}
 			}
 
@@ -1141,6 +1203,7 @@ namespace eval ukaz {
 			dict set plotdata $id varying $varying
 			dict set plotdata $id colormap $colormap
 			dict set plotdata $id zdata $zdata
+			dict set plotdata $id rasterpixelsize {}
 
 			lappend zstack $id
 			$self RedrawRequest
@@ -1187,34 +1250,48 @@ namespace eval ukaz {
 				dict set plotdata $id datarange $datarange
 			}
 
+			if {$newdata} {
+				dict set plotdata $id rasterpixelsize {}
+			}
+
 			if {[parsearg {with w} {}]} {
 				switch $with {
 					p -
 					points {
 						dict set plotdata $id type points 1
 						dict unset plotdata $id type lines
+						dict unset plotdata $id type raster
 					}
 
 					l -
 					lines {
 						dict set plotdata $id type lines 1
 						dict unset plotdata $id type points
+						dict unset plotdata $id type raster
 					}
 
 					lp -
 					linespoints {
 						dict set plotdata $id type points 1
 						dict set plotdata $id type lines 1
+						dict unset plotdata $id type raster
 					}
 
 					n -
 					none {
 						dict unset plotdata $id type points
 						dict unset plotdata $id type lines
+						dict unset plotdata $id type raster
+					}
+
+					raster {
+						dict unset plotdata $id type points
+						dict unset plotdata $id type lines
+						dict set plotdata $id type raster 1
 					}
 
 					default {
-						return -code error "with must be: points, lines, linespoints or none"
+						return -code error "with must be: points, lines, linespoints, raster or none"
 					}
 				}
 			}
@@ -1915,9 +1992,15 @@ namespace eval ukaz {
 				if {[dict exists $plotdata $id type points]} {
 					$self drawpoints $id
 				}
+				
 				if {[dict exists $plotdata $id type lines]} {
 					$self drawlines $id
 				}
+				
+				if {[dict exists $plotdata $id type raster]} {
+					$self drawraster $id
+				}
+
 				if {[dict exists $plotdata $id highlight]} {
 					$self drawhighlight $id
 				}
@@ -2004,6 +2087,57 @@ namespace eval ukaz {
 					}
 				}
 			}
+			return $ids
+		}
+		
+		method drawraster {id} {
+			set data [dict get $plotdata $id data]
+ 			set zdata [dict get $plotdata $id zdata]
+			lassign [geometry::pointclipz $data $zdata $displayrange] clipdata clipzdata clipinfo
+			
+			# store away the clipped & transformed data
+			# together with the info of the clipping
+			# needed for picking points
+			dict set plotdata $id clipinfo $clipinfo
+			set transdata [$self graph2pix $clipdata]
+			dict set plotdata $id transdata $transdata
+			
+			set zcolors [$self ztocolor $clipzdata [dict get $plotdata $id colormap]]
+
+			# compute size of the pixels so that it results in a smooth surface
+			set rasterpixelsize [dict get $plotdata $id rasterpixelsize]
+			if {$rasterpixelsize eq {}} {
+				set rasterpixelsize [compute_rasterpixelsize $data]
+				dict set plotdata $id rasterpixelsize $rasterpixelsize
+			}
+			
+			lassign $rasterpixelsize rxsize rysize
+			
+			set lldata {}
+			set urdata {}
+			foreach {x y} $clipdata {
+				lappend lldata [expr {$x - $rxsize/2}] [expr {$y - $rysize/2}]
+				lappend urdata [expr {$x + $rxsize/2}] [expr {$y + $rysize/2}]
+			}
+			
+			# convert edges to screen coordinates.
+			set lltrans [$self graph2pix $lldata]
+			set urtrans [$self graph2pix $urdata]
+			
+			set dxmin [dict get $displaysize xmin]
+			set dymin [dict get $displaysize ymin]
+			set dxmax [dict get $displaysize xmax]
+			set dymax [dict get $displaysize ymax]
+
+			# draw! - clip to drawing area 
+			set ids {}
+			foreach {x1 y1} $lltrans {x2 y2} $urtrans color $zcolors {
+				lappend ids [$hull create rectangle  \
+					[clipvalue $x1 $dxmin $dxmax] [clipvalue $y1 $dymax $dymin] [clipvalue $x2 $dxmin $dxmax] [clipvalue $y2 $dymax $dymin] \
+					-outline "" -fill $color -tag $selfns]
+				# puts "[clipvalue $x1 $dxmin $dxmax] [clipvalue $y1 $dymax $dymin] [clipvalue $x2 $dxmin $dxmax] [clipvalue $y2 $dymax $dymin] -fill $color -"
+			}
+
 			return $ids
 		}
 
