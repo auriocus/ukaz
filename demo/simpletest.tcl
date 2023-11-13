@@ -1,5 +1,5 @@
 set basedir [file dirname [info script]]
-lappend auto_path [file join  $basedir .. lib]
+lappend auto_path [file join  $basedir ..]
 
 if {0} {
 package require ukaz

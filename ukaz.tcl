@@ -593,6 +593,13 @@ namespace eval ukaz {
 		dict create xmin $xmin ymin $ymin xmax $xmax ymax $ymax zmin $zmin zmax $zmax
 	}
 
+	proc combine_range_1D {min1 max1 min2 max2} {
+		set min [expr {min($min1, $min2)}]
+		set max [expr {max($max1, $max2)}]
+		list $min $max
+	}
+
+
 	proc combine_range {range1 range2} {
 		if {$range1 == {}} { return $range2 }
 		if {$range2 == {}} { return $range1 }
@@ -632,6 +639,83 @@ namespace eval ukaz {
 		}
 		dict set result zmax $l1
 			
+		return $result
+	}
+	
+	proc combine_y2range {range1 range2 logx logy logy2 logz} {
+		# range1 corresponds to  y axis
+		# range2 corresponds to y2 axis
+		# x axis and z axis are combined
+		# y and y2 are distributed
+		
+		# case 1: only y axis
+		if {$range2 == {}} {
+			set result {}
+			
+			dict set result xmin [lindex [dict get $range1 xmin] $logx $logy] 
+			dict set result xmax [lindex [dict get $range1 xmax] $logx $logy] 
+			dict set result ymin [lindex [dict get $range1 ymin] $logx $logy] 
+			dict set result ymax [lindex [dict get $range1 ymax] $logx $logy] 
+			dict set result y2min +Inf
+			dict set result y2max -Inf
+			dict set result zmin [lindex [dict get $range1 zmin] $logz] 
+			dict set result zmax [lindex [dict get $range1 zmax] $logz] 
+			return $result
+		}
+		# case 2: only y2 axis. Rename second range
+		if {$range1 == {}} { 
+			set result {}
+			
+			dict set result xmin [lindex [dict get $range2 xmin] $logx $logy] 
+			dict set result xmax [lindex [dict get $range2 xmax] $logx $logy] 
+			dict set result ymin +Inf
+			dict set result ymax -Inf
+			dict set result y2min [dict get $range2 ymin]
+			dict set result y2max [dict get $range2 ymax]
+			dict set result zmin [lindex [dict get $range1 zmin] $logz] 
+			dict set result zmax [lindex [dict get $range1 zmax] $logz] 
+
+			return $range2
+		}
+		
+		# case 3: both y and y2 are set. Rename y2 correctly
+		# and combine the x- and z-range
+		# combine x
+		set result {}
+		set l1 [dict get $range1 xmin]
+		set l2 [dict get $range2 xmin]
+		
+		set xmin1 [lindex $l1 $logx $logy]
+		set xmin2 [lindex $l2 $logx $logy2]
+		
+		set l1 [dict get $range1 xmax]
+		set l2 [dict get $range2 xmax]
+		
+		set xmax1 [lindex $l1 $logx $logy]
+		set xmax2 [lindex $l2 $logx $logy2]
+		
+		lassign [combine_range_1D $xmin1 $xmax1 $xmin2 $xmax2] xmin xmax
+		dict set result xmin $xmin 
+		dict set result xmax $xmax
+
+		# combine z
+		set zmin1 [lindex [dict get $range1 zmin] $logz]
+		set zmax1 [lindex [dict get $range1 zmax] $logz]
+		set zmin2 [lindex [dict get $range2 zmin] $logz]
+		set zmax2 [lindex [dict get $range2 zmax] $logz]
+
+		lassign [combine_range_1D $zmin1 $zmax1 $zmin2 $zmax2] zmin zmax
+		dict set result zmin $zmin
+		dict set result zmax $zmax
+
+		# copy y 
+		dict set result ymin [lindex [dict get $range1 ymin] $logx $logy]
+		dict set result ymax [lindex [dict get $range1 ymax] $logx $logy]
+		
+		# copy y2 
+		dict set result y2min [lindex [dict get $range2 ymin] $logx $logy2]
+		dict set result y2max [lindex [dict get $range2 ymax] $logx $logy2]
+		
 		return $result
 	}
 
@@ -820,11 +904,13 @@ namespace eval ukaz {
 		variable parsearg_result {}
 	}
 
-	proc parsearg {option default} {
+	proc parsearg {option default {validoptions {}}} {
 		# read argument from args, set to default
 		# if unset in args. option can have alternative
 		# names. Return true if the option was set
 		# from the arguments, false if the default was substituted
+		# if validoptions is not empty, throw an error if the 
+		# supplied value does not match one of these
 		upvar 1 args procargs
 		set optname [lindex $option 0]
 		upvar 1 $optname resvar
@@ -848,8 +934,12 @@ namespace eval ukaz {
 			} else {
 				set resvar $default
 			}
+		} else {
+			if {[llength $validoptions] != 0 && $resvar ni $validoptions} {
+				set optlist [join [lmap x $validoptions {expr {($x eq "")?"empty string":"\"$x\""}}] ", "]
+				return -code error "$optname can't be \"$resvar\", must be one of: $optlist"
+			}
 		}
-
 		dict set parsearg_result $optname $resvar
 		return $success
 	}
@@ -1018,18 +1108,24 @@ namespace eval ukaz {
 
 		option -xrange -default {* *} -configuremethod rangeset
 		option -yrange -default {* *} -configuremethod rangeset
+		option -y2range -default {* *} -configuremethod rangeset
 		option -zrange -default {* *} -configuremethod rangeset
 		option -logx -default 0 -configuremethod opset
 		option -logy -default 0 -configuremethod opset
+		option -logy2 -default 0 -configuremethod opset
 		option -logz -default 0 -configuremethod opset
 		option -grid -default false -configuremethod opset
+		option -grid2 -default false -configuremethod opset
 		option -xtics -default auto -configuremethod opset
 		option -ytics -default auto -configuremethod opset
+		option -y2tics -default auto -configuremethod opset
 		option -ztics -default auto -configuremethod opset
 		option -xlabel -default {} -configuremethod opset
 		option -ylabel -default {} -configuremethod opset
+		option -y2label -default {} -configuremethod opset
 		option -xformat -default %g -configuremethod opset
 		option -yformat -default %g -configuremethod opset
+		option -y2format -default %g -configuremethod opset
 		option -zformat -default %g -configuremethod opset
 		option -font -default {} -configuremethod fontset
 		option -ticlength -default 5
@@ -1053,9 +1149,11 @@ namespace eval ukaz {
 		# computed list of tics and displayrange
 		variable xticlist
 		variable yticlist
+		variable y2ticlist
 		variable zticlist
 		variable displayrange
 		variable displaysize
+		variable showy2axis false
 
 		# store the history of ranges
 		# by zooming with the mouse
@@ -1065,7 +1163,7 @@ namespace eval ukaz {
 		variable dragdata {dragging false clicking false}
 
 		# identity transform
-		variable transform {1.0 0.0 1.0 0.0 1.0 0.0}
+		variable transform {1.0 0.0 1.0 0.0 1.0 0.0 1.0 0.0}
 
 		variable axisfont default
 		variable labelfont default
@@ -1115,7 +1213,7 @@ namespace eval ukaz {
 			# simulate gnuplot
 			# syntax plot <data>
 			#	?using usingspec?
-			#	?with lines/points/linespoints?
+			#	?with lines/points/linespoints/raster?
 			#	?color colorspec?
 			#	?pointtype ...?
 			#	?pointsize ...?
@@ -1131,9 +1229,10 @@ namespace eval ukaz {
 			parsearg {linewidth lw} 1.0
 			parsearg {dash} ""
 			parsearg {title t} ""
-			parsearg {varying} {}
+			parsearg {varying} {} { "" color }
 			parsearg {colormap} "jet"
 			parsearg {zdata} {}
+			parsearg {yaxis} y {y y2}
 
 			if {$using != {}} {
 				set data [transformdata_using $data $using]
@@ -1197,6 +1296,7 @@ namespace eval ukaz {
 			dict set plotdata $id pointtype $pointtype
 			dict set plotdata $id pointsize $pointsize
 			dict set plotdata $id title $title
+			dict set plotdata $id yaxis $yaxis
 			#
 			dict set plotdata $id linewidth $linewidth
 			dict set plotdata $id dash $dash
@@ -1301,16 +1401,17 @@ namespace eval ukaz {
 				dict set plotdata $id color $color
 			}
 
-			foreach {option property} {
-				{varying} varying
-				{colormap} colormap
-				{pointtype pt} pointtype
-				{pointsize ps} pointsize
-				{linewidth lw} linewidth
-				{dash} dash
-				{title t} title
+			foreach {option property valid} {
+				{varying} varying {"" color}
+				{colormap} colormap {}
+				{pointtype pt} pointtype {}
+				{pointsize ps} pointsize {}
+				{linewidth lw} linewidth {}
+				{dash} dash {}
+				{title t} title {}
+				{yaxis} yaxis {y y2}
 			} {
-				if {[parsearg $option {}]} {
+				if {[parsearg $option {} $valid]} {
 					dict set plotdata $id $property [set $property]
 				}
 			}
@@ -1363,6 +1464,7 @@ namespace eval ukaz {
 					$self configure -logx $how
 					$self configure -logy $how
 				}
+				y2 { $self configure -logy2 $how }
 				z  { $self configure -logz $how }
 				default {
 					return -code error "Unknown axis for log setting $what"
@@ -1682,24 +1784,41 @@ namespace eval ukaz {
 		method calcranges {} {
 			# compute ranges spanned by data
 			set datarange {}
+			set datarange2 {}
+			set showy2axis false
 			dict for {id data} $plotdata {
 				if {[dict get $data type] eq {}} { continue }
-				set datarange [combine_range $datarange [dict get $data datarange]]
+				switch [dict get $data yaxis] {
+					"y" {
+						set datarange [combine_range $datarange [dict get $data datarange]]
+					}
+					"y2" {
+						set datarange2 [combine_range $datarange2 [dict get $data datarange]]
+						set showy2axis true
+					}
+					default { error "strange y axis" }
+				}
 			}
 
-			set dxmin [lindex [dict get $datarange xmin] $options(-logx) $options(-logy)]
-			set dxmax [lindex [dict get $datarange xmax] $options(-logx) $options(-logy)]
-			set dymin [lindex [dict get $datarange ymin] $options(-logx) $options(-logy)]
-			set dymax [lindex [dict get $datarange ymax] $options(-logx) $options(-logy)]
-			set dzmin [lindex [dict get $datarange zmin] $options(-logz)]
-			set dzmax [lindex [dict get $datarange zmax] $options(-logz)]
+			set datarange [combine_y2range $datarange $datarange2 $options(-logx) $options(-logy) $options(-logy2) $options(-logz) ]
+
+			set dxmin [dict get $datarange xmin]
+			set dxmax [dict get $datarange xmax]
+			set dymin [dict get $datarange ymin]
+			set dymax [dict get $datarange ymax]
+			set dy2min [dict get $datarange y2min]
+			set dy2max [dict get $datarange y2max]
+			set dzmin [dict get $datarange zmin]
+			set dzmax [dict get $datarange zmax]
 
 			# now compute range from request & data
 			set xwiden {min false max false}
 			set ywiden {min false max false}
+			set y2widen {min false max false}
 			set zwiden {min false max false}
 			lassign $options(-xrange) xmin xmax
 			lassign $options(-yrange) ymin ymax
+			lassign $options(-y2range) y2min y2max
 			lassign $options(-zrange) zmin zmax
 
 			if {$xmin =="*" || ($options(-logx) && !islogfinite($xmin))} {
@@ -1709,6 +1828,11 @@ namespace eval ukaz {
 
 			if {$ymin =="*" || ($options(-logy) && !islogfinite($ymin))} {
 				set ymin $dymin
+				dict set ywiden min true
+			}
+
+			if {$y2min =="*" || ($options(-logy2) && !islogfinite($y2min))} {
+				set y2min $dy2min
 				dict set ywiden min true
 			}
 
@@ -1727,6 +1851,11 @@ namespace eval ukaz {
 				dict set ywiden max true
 			}
 
+			if {$y2max =="*" || ($options(-logy2) && !islogfinite($y2max))} {
+				set y2max $dy2max
+				dict set ywiden max true
+			}
+
 			if {$zmax =="*" || ($options(-logz) && !islogfinite($zmax))} {
 				set zmax $dzmax
 				dict set zwiden max true
@@ -1736,6 +1865,7 @@ namespace eval ukaz {
 			# doesn't provide us with a sensible range
 			lassign [sanitize_range $xmin $xmax] xmin xmax
 			lassign [sanitize_range $ymin $ymax] ymin ymax
+			lassign [sanitize_range $y2min $y2max] y2min y2max
 			lassign [sanitize_range $zmin $zmax] zmin zmax
 			
 			# now we have the tight range in xmin,xmax, ymin, ymax
@@ -1743,13 +1873,17 @@ namespace eval ukaz {
 			lassign [compute_ticlist $xmin $xmax $options(-xtics) \
 				$options(-logx) $xwiden [formatcmd $options(-xformat)]] xticlist xmin xmax
 
+			lassign [compute_ticlist $y2min $y2max $options(-y2tics) \
+				$options(-logy2) $ywiden [formatcmd $options(-y2format)]] y2ticlist y2min y2max
+
 			lassign [compute_ticlist $ymin $ymax $options(-ytics) \
 				$options(-logy) $ywiden [formatcmd $options(-yformat)]] yticlist ymin ymax
 
 			lassign [compute_ticlist $zmin $zmax $options(-ztics) \
 				$options(-logz) $zwiden [formatcmd $options(-zformat)]] zticlist zmin zmax
 
-			set displayrange [dict create xmin $xmin xmax $xmax ymin $ymin ymax $ymax zmin $zmin zmax $zmax]
+			set displayrange [dict create xmin $xmin xmax $xmax ymin $ymin ymax $ymax \
+				y2min $y2min y2max $y2max zmin $zmin zmax $zmax]
 
 		}
 
@@ -1785,6 +1919,14 @@ namespace eval ukaz {
 				set nw [font measure $axisfont $text]
 				set lwidth [expr {max($lwidth, $nw)}]
 			}
+			
+			# maximum width of the y2tic labels
+			set l2width 0
+			foreach {text tic} $y2ticlist {
+				set nw [font measure $axisfont $text]
+				set l2width [expr {max($l2width, $nw)}]
+			}
+
 
 			set lascent [font metrics $axisfont -ascent]
 			set ldescent [font metrics $axisfont -descent]
@@ -1818,9 +1960,24 @@ namespace eval ukaz {
 			} else {
 				set ylabelx 0
 			}
+
+			if {$showy2axis} {
+				# check if there is enough room at the right hand side
+				set deskxmax [expr {($w - $l2width - $options(-ticlength)) - $margin}]
+				if { $options(-y2label) != "" } {
+					set y2labelx [expr {$w - $margin/2}]
+					set deskxmax [expr {$deskxmax - 1.2 * $lineheight}]
+				} else {
+					set y2labelx 0
+				}
+			} else {
+				set y2labelx 0
+				set deskxmax $w
+			}
+
 			# if necessary, make space for first xtic
 			set deskxmin [expr {max($deskxmin, 0.5*$xminwidth)}]
-			set deskxmax [expr {$w-0.5*$xmaxwidth-$margin}]
+			set deskxmax [expr {min($deskxmax, $w-0.5*$xmaxwidth-$margin)}]
 
 			if {[dict get $options(-key) outside] != "inside"} {
 				# make extra space for legend
@@ -1842,7 +1999,7 @@ namespace eval ukaz {
 
 
 			set displaysize [dict create xmin $deskxmin xmax $deskxmax ymin $deskymin ymax $deskymax \
-				margin $margin xlabely $xlabely ylabelx $ylabelx]
+				margin $margin xlabely $xlabely ylabelx $ylabelx y2labelx $y2labelx]
 		}
 
 		# compute the transform from graph coordinates
@@ -1852,6 +2009,8 @@ namespace eval ukaz {
 			set xmax [dict get $displayrange xmax]
 			set ymin [dict get $displayrange ymin]
 			set ymax [dict get $displayrange ymax]
+			set y2min [dict get $displayrange y2min]
+			set y2max [dict get $displayrange y2max]
 			set zmin [dict get $displayrange zmin]
 			set zmax [dict get $displayrange zmax]
 
@@ -1876,6 +2035,14 @@ namespace eval ukaz {
 			lassign [compute_rangetransform \
 					$ymin $ymax $dymin $dymax] ymul yadd
 
+			if {$options(-logy2)} {
+				set y2min [cutoff_log $y2min]
+				set y2max [cutoff_log $y2max]
+			}
+
+			lassign [compute_rangetransform \
+					$y2min $y2max $dymin $dymax] y2mul y2add
+
 			if {$options(-logz)} {
 				set zmin [cutoff_log $zmin]
 				set zmax [cutoff_log $zmax]
@@ -1885,17 +2052,26 @@ namespace eval ukaz {
 			lassign [compute_rangetransform \
 					$zmin $zmax 0.0 1.0] zmul zadd
 
-			set transform [list $xmul $xadd $ymul $yadd $zmul $zadd]
+			set transform [list $xmul $xadd $ymul $yadd $y2mul $y2add $zmul $zadd]
 		}
 
-		method graph2pix {coords} {
+		method graph2pix {coords {yaxis y}} {
 			# transform a list of coordinates to pixels
-			lassign $transform xmul xadd ymul yadd
+			lassign $transform xmul xadd ymul yadd y2mul y2add
+			set logx $options(-logx)
+			if {$yaxis eq "y2"} {
+				set yadd $y2add
+				set ymul $y2mul
+				set logy $options(-logy2)
+			} else {
+				set logy $options(-logy)
+			}
+
 			set result {}
 
 			set logcode {}
-			if {$options(-logx)} { append logcode x }
-			if {$options(-logy)} { append logcode y }
+			if {$logx} { append logcode x }
+			if {$logy} { append logcode y }
 			switch $logcode {
 				{} {
 					foreach {x y} $coords {
@@ -1928,7 +2104,7 @@ namespace eval ukaz {
 		}
 		
 		method ztocolor {zvalues name} {
-			lassign $transform xmul xadd ymul yadd zmul zadd
+			lassign $transform xmul xadd ymul yadd y2mul y2add zmul zadd
 			set map [getcolormap $name]
 
 			if {$options(-logz)} {
@@ -1942,7 +2118,7 @@ namespace eval ukaz {
 
 		# convert a single value to/from graph coordinates
 		method xToPix {x} {
-			lassign $transform xmul xadd ymul yadd
+			lassign $transform xmul xadd
 			if {$options(-logx)} {
 				expr {($x<=0)? -Inf*$xmul : log($x)*$xmul+$xadd}
 			} else {
@@ -1956,6 +2132,15 @@ namespace eval ukaz {
 				expr {($y<=0) ? -Inf*$ymul : log($y)*$ymul+$yadd}
 			} else {
 				expr {$y*$ymul+$yadd}
+			}
+		}
+
+		method y2ToPix {y} {
+			lassign $transform xmul xadd ymul yadd y2mul y2add
+			if {$options(-logy2)} {
+				expr {($y<=0) ? -Inf*$y2mul : log($y)*$y2mul+$y2add}
+			} else {
+				expr {$y*$y2mul+$y2add}
 			}
 		}
 
@@ -2021,11 +2206,12 @@ namespace eval ukaz {
 				set colorcode false
 			}
 			
+			set yaxis [dict get $plotdata $id yaxis]
 			# store away the clipped & transformed data
 			# together with the info of the clipping
 			# needed for picking points
 			dict set plotdata $id clipinfo $clipinfo
-			set transdata [$self graph2pix $clipdata]
+			set transdata [$self graph2pix $clipdata $yaxis]
 			dict set plotdata $id transdata $transdata
 
 			set shapeproc shape-[dict get $plotdata $id pointtype]
@@ -2051,6 +2237,7 @@ namespace eval ukaz {
 			set color [dict get $plotdata $id color]
 			set width [dict get $plotdata $id linewidth]
 			set dash [dict get $plotdata $id dash]
+			set yaxis [dict get $plotdata $id yaxis]
 
 			set piece {}
 			set pieces {}
@@ -2058,7 +2245,7 @@ namespace eval ukaz {
 				if {isnan($x) || isnan($y)} {
 					# NaN value, start a new piece
 					if {[llength $piece]>0} {
-						lappend pieces [$self graph2pix $piece]
+						lappend pieces [$self graph2pix $piece $yaxis]
 					}
 					set piece {}
 					continue
@@ -2068,7 +2255,7 @@ namespace eval ukaz {
 			}
 
 
-			lappend pieces [$self graph2pix $piece]
+			lappend pieces [$self graph2pix $piece $yaxis]
 
 			set ids {}
 			foreach piece $pieces {
@@ -2095,11 +2282,12 @@ namespace eval ukaz {
  			set zdata [dict get $plotdata $id zdata]
 			lassign [geometry::pointclipz $data $zdata $displayrange] clipdata clipzdata clipinfo
 			
+			set yaxis [dict get $plotdata $id yaxis]
 			# store away the clipped & transformed data
 			# together with the info of the clipping
 			# needed for picking points
 			dict set plotdata $id clipinfo $clipinfo
-			set transdata [$self graph2pix $clipdata]
+			set transdata [$self graph2pix $clipdata $yaxis]
 			dict set plotdata $id transdata $transdata
 			
 			set zcolors [$self ztocolor $clipzdata [dict get $plotdata $id colormap]]
@@ -2121,8 +2309,8 @@ namespace eval ukaz {
 			}
 			
 			# convert edges to screen coordinates.
-			set lltrans [$self graph2pix $lldata]
-			set urtrans [$self graph2pix $urdata]
+			set lltrans [$self graph2pix $lldata $yaxis]
+			set urtrans [$self graph2pix $urdata $yaxis]
 			
 			set dxmin [dict get $displaysize xmin]
 			set dymin [dict get $displaysize ymin]
@@ -2349,6 +2537,19 @@ namespace eval ukaz {
 				$hull create text  [expr {$dxmin-$options(-ticlength)}] $desky \
 					-anchor e -justify right \
 					-text $text -font $axisfont -tag $selfns
+			}
+			
+			if {$showy2axis} {
+				foreach {text yval} $y2ticlist {
+					set desky [$self y2ToPix $yval]
+					if { $options(-grid2) } {
+						$hull create line $dxmin $desky $dxmax $desky -fill gray -tag $selfns
+					}
+					$hull create line $dxmax $desky  [expr {$dxmax+$options(-ticlength)}] $desky -tag $selfns
+					$hull create text  [expr {$dxmax+$options(-ticlength)}] $desky \
+						-anchor w -justify right \
+						-text $text -font $axisfont -tag $selfns
+				}
 			}
 
 			# draw xlabel and ylabel
