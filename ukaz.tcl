@@ -2566,6 +2566,13 @@ namespace eval ukaz {
 				$hull create text $xpos  $ycenter -anchor n \
 					-angle 90 -text $options(-ylabel) -font $axisfont -tag $selfns
 			}
+			
+			if {$options(-y2label) != {} && $showy2axis} {
+				set ycenter [expr {($dymin + $dymax) / 2}]
+				set xpos [dict get $displaysize y2labelx]
+				$hull create text $xpos  $ycenter -anchor s \
+					-angle 90 -text $options(-y2label) -font $axisfont -tag $selfns
+			}
 
 		}
 
