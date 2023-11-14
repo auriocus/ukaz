@@ -790,7 +790,9 @@ namespace eval ukaz {
 				if {$log} {
 					set decades [expr {log10($max)-log10($min)}]
 
-					if {$decades<=2} {
+					if {$decades<=0.5} {
+						set minor {1 2 3 4 5 6 7 8 9}
+					} elseif {$decades<=2} {
 						set minor {1 2 3 4 5}
 					} elseif {$decades<=3} {
 						set minor {1 2 5}
@@ -1532,6 +1534,10 @@ namespace eval ukaz {
 			$self set yrange *:*
 		}
 
+		method {set auto y2} {} {
+			$self set y2range *:*
+		}
+
 		method {set auto z} {} {
 			$self set zrange *:*
 		}
@@ -1545,8 +1551,17 @@ namespace eval ukaz {
 			$self RedrawRequest
 		}
 
-		method {unset grid} {} {
-			$self set grid off
+		method {set grid2} {{how on}} {
+			if {$how} {
+				set options(-grid2) on
+			} else {
+				set options(-grid2) off
+			}
+			$self RedrawRequest
+		}
+
+		method {unset grid2} {} {
+			$self set grid2 off
 		}
 
 		proc parsetics {arglist} {
@@ -1598,6 +1613,11 @@ namespace eval ukaz {
 			$self RedrawRequest
 		}
 
+		method {set y2tics} {args} {
+			set options(-y2tics) [parsetics $args]
+			$self RedrawRequest
+		}
+
 		method {set xlabel} {text} {
 			set options(-xlabel) $text
 			$self RedrawRequest
@@ -1607,11 +1627,16 @@ namespace eval ukaz {
 			set options(-ylabel) $text
 			$self RedrawRequest
 		}
+		method {set y2label} {text} {
+			set options(-y2label) $text
+			$self RedrawRequest
+		}
 
 		method {set format} {axis args} {
 			switch $axis {
 				x  { upvar 0 options(-xformat) fmtvar }
 				y  { upvar 0 options(-yformat) fmtvar }
+				y2  { upvar 0 options(-y2format) fmtvar }
 				z  { upvar 0 options(-zformat) fmtvar }
 				default { return -code error "Unknown axis $axis" }
 			}
@@ -2162,6 +2187,15 @@ namespace eval ukaz {
 			}
 		}
 
+		method pixToY2 {y} {
+			lassign $transform xmul xadd ymul yadd y2mul y2add
+			if {$options(-logy2)}  {
+				expr {exp(($y-$y2add)/$y2mul)}
+			} else {
+				expr {($y-$y2add)/$y2mul}
+			}
+		}
+
 		method getdisplayrange {args} {
 			return $displayrange
 		}
@@ -2197,16 +2231,23 @@ namespace eval ukaz {
 		method drawpoints {id} {
 			set data [dict get $plotdata $id data]
 			
+			set yaxis [dict get $plotdata $id yaxis]
+			set cliprange $displayrange
+			if {$yaxis eq "y2"} {
+				dict set cliprange ymin [dict get $displayrange y2min]
+				dict set cliprange ymax [dict get $displayrange y2max]
+			}
+			
+			
 			if {[dict get $plotdata $id varying] == "color"} {
  				set zdata [dict get $plotdata $id zdata]
-				lassign [geometry::pointclipz $data $zdata $displayrange] clipdata clipzdata clipinfo
+				lassign [geometry::pointclipz $data $zdata $cliprange] clipdata clipzdata clipinfo
 				set colorcode true
 			} else {
-				lassign [geometry::pointclip $data $displayrange] clipdata clipinfo
+				lassign [geometry::pointclip $data $cliprange] clipdata clipinfo
 				set colorcode false
 			}
 			
-			set yaxis [dict get $plotdata $id yaxis]
 			# store away the clipped & transformed data
 			# together with the info of the clipping
 			# needed for picking points
@@ -2518,7 +2559,7 @@ namespace eval ukaz {
 			# draw xtics
 			foreach {text xval} $xticlist {
 				set deskx [$self xToPix $xval]
-				if { $options(-grid) } {
+				if { $options(-grid) || $options(-grid2) } {
 					$hull create line $deskx $dymin $deskx $dymax -fill gray -tag $selfns
 				}
 				$hull create line $deskx $dymin  $deskx [expr {$dymin+$options(-ticlength)}] -tag $selfns
@@ -2647,11 +2688,12 @@ namespace eval ukaz {
 
 		method zoomin {range} {
 			# store current range in zoomstack
-			lappend zoomstack [list $options(-xrange) $options(-yrange)]
+			lappend zoomstack [list $options(-xrange) $options(-yrange) $options(-y2range)]
 			# apply zoom range
-			lassign $range xmin xmax ymin ymax
+			lassign $range xmin xmax ymin ymax y2min y2max
 			set options(-xrange) [list $xmin $xmax]
 			set options(-yrange) [list $ymin $ymax]
+			set options(-y2range) [list $y2min $y2max]
 			$self RedrawRequest
 			event generate $win <<Zoom>> -data $range
 		}
@@ -2660,7 +2702,7 @@ namespace eval ukaz {
 			if {[llength $zoomstack] > 0} {
 				set range [lindex $zoomstack end]
 				set zoomstack [lrange $zoomstack 0 end-1]
-				lassign $range options(-xrange) options(-yrange)
+				lassign $range options(-xrange) options(-yrange) options(-y2range)
 				$self RedrawRequest
 				event generate $win <<Zoom>> -data [concat $range]
 			}
@@ -2710,17 +2752,20 @@ namespace eval ukaz {
 				# inverse transform both coordinates
 				set x1 [$self pixToX $x]
 				set y1 [$self pixToY $y]
+				set y21 [$self pixToY2 $y]
 				set x0 [$self pixToX [dict get $dragdata x0]]
 				set y0 [$self pixToY [dict get $dragdata y0]]
+				set y20 [$self pixToY2 [dict get $dragdata y0]]
 				# remove drag rectangle
 				$hull delete dragrect
 				# check for correct ordering
 				if {$x1 < $x0} { lassign [list $x0 $x1] x1 x0 }
 				if {$y1 < $y0} { lassign [list $y0 $y1] y1 y0 }
+				if {$y21 < $y20} { lassign [list $y20 $y21] y21 y20 }
 
 				if {$x0 != $x1 && $y0 != $y1} {
 					# zoom in!
-					$self zoomin [list $x0 $x1 $y0 $y1]
+					$self zoomin [list $x0 $x1 $y0 $y1 $y20 $y21]
 				}
 			}
 			dict set dragdata dragging false
