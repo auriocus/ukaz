@@ -1521,6 +1521,11 @@ namespace eval ukaz {
 			$self RedrawRequest
 		}
 		
+		method {set y2range} {args} {
+			set options(-y2range) [rangeparse $args]
+			$self RedrawRequest
+		}
+		
 		method {set zrange} {args} {
 			set options(-zrange) [rangeparse $args]
 			$self RedrawRequest
