@@ -666,16 +666,16 @@ namespace eval ukaz {
 		if {$range1 == {}} { 
 			set result {}
 			
-			dict set result xmin [lindex [dict get $range2 xmin] $logx $logy] 
-			dict set result xmax [lindex [dict get $range2 xmax] $logx $logy] 
+			dict set result xmin [lindex [dict get $range2 xmin] $logx $logy2] 
+			dict set result xmax [lindex [dict get $range2 xmax] $logx $logy2] 
 			dict set result ymin +Inf
 			dict set result ymax -Inf
-			dict set result y2min [dict get $range2 ymin]
-			dict set result y2max [dict get $range2 ymax]
-			dict set result zmin [lindex [dict get $range1 zmin] $logz] 
-			dict set result zmax [lindex [dict get $range1 zmax] $logz] 
+			dict set result y2min [lindex [dict get $range2 ymin] $logx $logy2]
+			dict set result y2max [lindex [dict get $range2 ymax] $logx $logy2]
+			dict set result zmin [lindex [dict get $range2 zmin] $logz] 
+			dict set result zmax [lindex [dict get $range2 zmax] $logz] 
 
-			return $range2
+			return $result
 		}
 		
 		# case 3: both y and y2 are set. Rename y2 correctly
