@@ -1131,6 +1131,8 @@ namespace eval ukaz {
 		option -zformat -default %g -configuremethod opset
 		option -font -default {} -configuremethod fontset
 		option -ticlength -default 5
+		option -cbwidth -default 15
+		option -colorbar -default true
 		option -samplelength -default 20
 		option -samplesize -default 1.0
 		option -key -default {vertical top horizontal right disabled false outside inside}
@@ -1156,6 +1158,8 @@ namespace eval ukaz {
 		variable displayrange
 		variable displaysize
 		variable showy2axis false
+		variable showcolorbar false
+		variable colorbarmap jet
 
 		# store the history of ranges
 		# by zooming with the mouse
@@ -1816,6 +1820,7 @@ namespace eval ukaz {
 			set datarange {}
 			set datarange2 {}
 			set showy2axis false
+			set showcolorbar false
 			dict for {id data} $plotdata {
 				if {[dict get $data type] eq {}} { continue }
 				switch [dict get $data yaxis] {
@@ -1828,6 +1833,12 @@ namespace eval ukaz {
 					}
 					default { error "strange y axis" }
 				}
+				if {[dict get $data type]  eq "raster" || [dict get $data varying] eq "color"} {
+					puts "$id has color"
+					set showcolorbar true
+					set colorbarmap [dict get $data colormap]
+				}
+			       	       
 			}
 
 			set datarange [combine_y2range $datarange $datarange2 $options(-logx) $options(-logy) $options(-logy2) $options(-logz) ]
@@ -1957,7 +1968,13 @@ namespace eval ukaz {
 				set l2width [expr {max($l2width, $nw)}]
 			}
 
-
+			# maximum width of ztic labels
+			set zlblwidth 0
+			foreach {text tic} $zticlist {
+				set nw [font measure $axisfont $text]
+				set zlblwidth [expr {max($zlblwidth, $nw)}]
+			}
+			
 			set lascent [font metrics $axisfont -ascent]
 			set ldescent [font metrics $axisfont -descent]
 			set lineheight [font metrics $axisfont -linespace]
@@ -1990,22 +2007,35 @@ namespace eval ukaz {
 			} else {
 				set ylabelx 0
 			}
+			
+			# from the right, make space for:
+			#  - margin
+			#  - colorbar with labels
+			#  - 2nd yaxis with labels
+			
+			set deskxmax [expr {$w - $margin}]
 
+			# rightmost: colorbar
+			if {$showcolorbar} {
+				set deskxmax [expr {$deskxmax - $zlblwidth - $options(-ticlength) - $options(-cbwidth) - $margin/2}]
+				set cbxpos [expr {$deskxmax + $margin/2}]
+				puts "cbxpos $cbxpos" 
+			} else {
+				set cbxpos 0
+			}
+
+			# next: y2label, then axis labels and tics on y2 axis
 			if {$showy2axis} {
-				# check if there is enough room at the right hand side
-				set deskxmax [expr {($w - $l2width - $options(-ticlength)) - $margin}]
+				set y2labelx [expr {$deskxmax + $margin/2}]
+				set deskxmax [expr {$deskxmax - $l2width - $options(-ticlength)}]
 				if { $options(-y2label) != "" } {
-					set y2labelx [expr {$w - $margin/2}]
 					set deskxmax [expr {$deskxmax - 1.2 * $lineheight}]
-				} else {
-					set y2labelx 0
 				}
 			} else {
 				set y2labelx 0
-				set deskxmax $w
 			}
 
-			# if necessary, make space for first xtic
+			# if necessary, make space for first xtic and last
 			set deskxmin [expr {max($deskxmin, 0.5*$xminwidth)}]
 			set deskxmax [expr {min($deskxmax, $w-0.5*$xmaxwidth-$margin)}]
 
@@ -2029,7 +2059,7 @@ namespace eval ukaz {
 
 
 			set displaysize [dict create xmin $deskxmin xmax $deskxmax ymin $deskymin ymax $deskymax \
-				margin $margin xlabely $xlabely ylabelx $ylabelx y2labelx $y2labelx]
+				margin $margin xlabely $xlabely ylabelx $ylabelx y2labelx $y2labelx cbxpos $cbxpos]
 		}
 
 		# compute the transform from graph coordinates
@@ -2172,6 +2202,16 @@ namespace eval ukaz {
 			} else {
 				expr {$y*$y2mul+$y2add}
 			}
+		}
+		
+		method zToNorm {z} {
+			lassign $transform xmul xadd ymul yadd y2mul y2add zmul zadd
+			if {$options(-logz)} {
+				set znorm [expr {($z<=0) ? -Inf*$zmul : log($z)*$zmul + $zadd}]
+			} else {
+				set znorm [expr {$z*$zmul + $zadd}]
+			}
+			return $znorm
 		}
 
 		method pixToX {x} {
@@ -2596,6 +2636,33 @@ namespace eval ukaz {
 						-anchor w -justify right \
 						-text $text -font $axisfont -tag $selfns
 				}
+			}
+			
+			if {$showcolorbar} {
+				# compute extension of colorbar
+				set cbxpos [dict get $displaysize cbxpos]
+				set cbx2pos [expr {$cbxpos + $options(-cbwidth)}]
+
+				# plot labels and ticmarks
+				foreach {text zval} $zticlist {
+					set deskz [$self zToNorm $zval]
+					set desky [expr {$dymin + ($dymax - $dymin)*$deskz}]
+					$hull create line $cbx2pos $desky  [expr {$cbx2pos+$options(-ticlength)}] $desky -tag $selfns
+					$hull create text  [expr {$cbx2pos+$options(-ticlength)}] $desky \
+						-anchor w -justify right \
+						-text $text -font $axisfont -tag $selfns
+				}
+
+				# plot colors
+				set map [getcolormap $colorbarmap]
+				for {set znorm 0} {$znorm < $dymin - $dymax} {incr znorm} {
+					set frac [expr {1.0 - double($znorm) / ($dymin - $dymax)}]
+					set y [expr {int($znorm + $dymax)}]
+					$hull create rectangle $cbxpos $y $cbx2pos $y -outline {} -fill [getcolor $map $frac] -tag $selfns
+				}
+
+				# rectangle containing colorbar
+				$hull create rectangle $cbxpos $dymin $cbx2pos $dymax -tag $selfns
 			}
 
 			# draw xlabel and ylabel
