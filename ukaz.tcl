@@ -1130,17 +1130,14 @@ namespace eval ukaz {
 		option -y2format -default %g -configuremethod opset
 		option -zformat -default %g -configuremethod opset
 		option -font -default {} -configuremethod fontset
-		option -ticlength -default 5
-		option -cbwidth -default 15
-		option -colorbar -default true
-		option -samplelength -default 20
-		option -samplesize -default 1.0
+		option -ticlength -default 5 -configuremethod opset
+		option -cbwidth -default 15 -configuremethod opset
+		option -samplelength -default 20 -configuremethod opset
+		option -samplesize -default 1.0 -configuremethod opset
 		option -key -default {vertical top horizontal right disabled false outside inside}
-		option -keyspacing -default 1.0
-
+		option -keyspacing -default 1.0 -configuremethod opset
 		option -enhanced -default false -configuremethod unimplemented
 		option -redraw -default 0 -readonly yes
-
 		option -displayrange -readonly yes -cgetmethod getdisplayrange
 		option -displaysize -readonly yes -cgetmethod getdisplaysize
 
@@ -1833,8 +1830,7 @@ namespace eval ukaz {
 					}
 					default { error "strange y axis" }
 				}
-				if {[dict get $data type]  eq "raster" || [dict get $data varying] eq "color"} {
-					puts "$id has color"
+				if {[dict exists $data type raster] || [dict get $data varying] eq "color"} {
 					set showcolorbar true
 					set colorbarmap [dict get $data colormap]
 				}
@@ -2019,7 +2015,6 @@ namespace eval ukaz {
 			if {$showcolorbar} {
 				set deskxmax [expr {$deskxmax - $zlblwidth - $options(-ticlength) - $options(-cbwidth) - $margin/2}]
 				set cbxpos [expr {$deskxmax + $margin/2}]
-				puts "cbxpos $cbxpos" 
 			} else {
 				set cbxpos 0
 			}
