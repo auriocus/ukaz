@@ -1116,6 +1116,7 @@ namespace eval ukaz {
 		option -logy -default 0 -configuremethod opset
 		option -logy2 -default 0 -configuremethod opset
 		option -logz -default 0 -configuremethod opset
+		option -aspectsquare -default false -configuremethod opset
 		option -grid -default false -configuremethod opset
 		option -grid2 -default false -configuremethod opset
 		option -xtics -default auto -configuremethod opset
@@ -1546,6 +1547,11 @@ namespace eval ukaz {
 
 		method {set auto z} {} {
 			$self set zrange *:*
+		}
+		
+		method {set aspectsquare} {{how on}} {
+			set options(-aspectsquare) $how
+			$self RedrawRequest
 		}
 
 		method {set grid} {{how on}} {
@@ -2089,6 +2095,27 @@ namespace eval ukaz {
 
 			lassign [compute_rangetransform \
 					$ymin $ymax $dymin $dymax] ymul yadd
+			
+			if {$options(-aspectsquare)} {
+				# make x and y use identical units
+				# useful for colormap plotting
+				# 
+				# the scaling factors xmul and ymul must be set equal
+				# Use the smaller of these and preserve the sign
+				if {abs($xmul) < abs($ymul)} {
+					# fix ymul
+					set ymulnew [expr {sign($ymul)*abs($xmul)}]
+					set ycenter [expr {($ymin + $ymax)/2.0}]
+					set yadd [expr {$yadd + $ymul*$ycenter - $ymulnew*$ycenter}]
+					set ymul $ymulnew
+				} else {
+					set xmulnew [expr {sign($xmul)*abs($ymul)}]
+					set xcenter [expr {($xmin + $xmax)/2.0}]
+					set xadd [expr {$xadd + $xmul*$xcenter - $xmulnew*$xcenter}]
+					set xmul $xmulnew
+				}
+			}
+				
 
 			if {$options(-logy2)} {
 				set y2min [cutoff_log $y2min]
@@ -3553,6 +3580,18 @@ namespace eval ukaz {
 
 	proc ::tcl::mathfunc::isnan {x} {
 		expr {$x != $x}
+	}
+
+	proc ::tcl::mathfunc::sign {x} {
+		if {$x < 0} {
+			return -1.0
+		}
+		
+		if {$x > 0} {
+			return +1.0
+		}
+
+		return 0.0
 	}
 
 }
