@@ -455,7 +455,10 @@ namespace eval ukaz {
 		set ReqCopy $Requests
 		set Requests {}
 		dict for {cmd val} $ReqCopy {
-			uplevel #0 $cmd
+			if {[catch {uplevel #0 $cmd} err]} {
+				# ignore background errors, just log to stderr
+				puts stderr $err
+			}
 		}
 	}
 
@@ -2129,7 +2132,6 @@ namespace eval ukaz {
 							set ymin [expr {exp($ymin)}]
 							set ymax [expr {exp($ymax)}]
 						}
-						puts "New yrange: $ymin $ymax"
 						dict set displayrange ymin $ymin
 						dict set displayrange ymax $ymax
 						set forcerecalc true
@@ -2147,7 +2149,6 @@ namespace eval ukaz {
 							set xmin [expr {exp($xmin)}]
 							set xmax [expr {exp($xmax)}]
 						}
-						puts "New xrange: $xmin $xmax"
 						dict set displayrange xmin $xmin
 						dict set displayrange xmax $xmax
 						set forcerecalc true
