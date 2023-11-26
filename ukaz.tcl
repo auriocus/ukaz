@@ -1818,92 +1818,105 @@ namespace eval ukaz {
 			dict keys $plotdata
 		}
 		
-		method calcranges {} {
-			# compute ranges spanned by data
-			set datarange {}
-			set datarange2 {}
-			set showy2axis false
-			set showcolorbar false
-			dict for {id data} $plotdata {
-				if {[dict get $data type] eq {}} { continue }
-				switch [dict get $data yaxis] {
-					"y" {
-						set datarange [combine_range $datarange [dict get $data datarange]]
-					}
-					"y2" {
-						set datarange2 [combine_range $datarange2 [dict get $data datarange]]
-						set showy2axis true
-					}
-					default { error "strange y axis" }
+		method calcranges {{recalc false}} {
+			# compute range and ticmark positions on the coordinate axes
+			#
+			# if recalc is true, then use the previously calculated displayrange
+			# to recompute the ticmarks instead of the range spanned by the data
+
+			if {$recalc} {
+				foreach key {xmin xmax ymin ymax y2min y2max zmin zmax} {
+					set $key [dict get $displayrange $key]
 				}
-				if {[dict exists $data type raster] || [dict get $data varying] eq "color"} {
-					set showcolorbar true
-					set colorbarmap [dict get $data colormap]
+				set xwiden {min false max false}
+				set ywiden {min false max false}
+				set y2widen {min false max false}
+				set zwiden {min false max false}
+			} else {
+				set datarange {}
+				set datarange2 {}
+				set showy2axis false
+				set showcolorbar false
+				dict for {id data} $plotdata {
+					if {[dict get $data type] eq {}} { continue }
+					switch [dict get $data yaxis] {
+						"y" {
+							set datarange [combine_range $datarange [dict get $data datarange]]
+						}
+						"y2" {
+							set datarange2 [combine_range $datarange2 [dict get $data datarange]]
+							set showy2axis true
+						}
+						default { error "strange y axis" }
+					}
+					if {[dict exists $data type raster] || [dict get $data varying] eq "color"} {
+						set showcolorbar true
+						set colorbarmap [dict get $data colormap]
+					}
+							   
 				}
-			       	       
+
+				set datarange [combine_y2range $datarange $datarange2 $options(-logx) $options(-logy) $options(-logy2) $options(-logz) ]
+
+				set dxmin [dict get $datarange xmin]
+				set dxmax [dict get $datarange xmax]
+				set dymin [dict get $datarange ymin]
+				set dymax [dict get $datarange ymax]
+				set dy2min [dict get $datarange y2min]
+				set dy2max [dict get $datarange y2max]
+				set dzmin [dict get $datarange zmin]
+				set dzmax [dict get $datarange zmax]
+
+				# now compute range from request & data
+				set xwiden {min false max false}
+				set ywiden {min false max false}
+				set y2widen {min false max false}
+				set zwiden {min false max false}
+				lassign $options(-xrange) xmin xmax
+				lassign $options(-yrange) ymin ymax
+				lassign $options(-y2range) y2min y2max
+				lassign $options(-zrange) zmin zmax
+
+				if {$xmin =="*" || ($options(-logx) && !islogfinite($xmin))} {
+					set xmin $dxmin
+					dict set xwiden min true
+				}
+
+				if {$ymin =="*" || ($options(-logy) && !islogfinite($ymin))} {
+					set ymin $dymin
+					dict set y2widen min true
+				}
+
+				if {$y2min =="*" || ($options(-logy2) && !islogfinite($y2min))} {
+					set y2min $dy2min
+					dict set ywiden min true
+				}
+
+				if {$zmin =="*" || ($options(-logz) && !islogfinite($zmin))} {
+					set zmin $dzmin
+					dict set zwiden min true
+				}
+
+				if {$xmax =="*" || ($options(-logx) && !islogfinite($xmax))} {
+					set xmax $dxmax
+					dict set xwiden max true
+				}
+
+				if {$ymax =="*" || ($options(-logy) && !islogfinite($ymax))} {
+					set ymax $dymax
+					dict set ywiden max true
+				}
+
+				if {$y2max =="*" || ($options(-logy2) && !islogfinite($y2max))} {
+					set y2max $dy2max
+					dict set y2widen max true
+				}
+
+				if {$zmax =="*" || ($options(-logz) && !islogfinite($zmax))} {
+					set zmax $dzmax
+					dict set zwiden max true
+				}
 			}
-
-			set datarange [combine_y2range $datarange $datarange2 $options(-logx) $options(-logy) $options(-logy2) $options(-logz) ]
-
-			set dxmin [dict get $datarange xmin]
-			set dxmax [dict get $datarange xmax]
-			set dymin [dict get $datarange ymin]
-			set dymax [dict get $datarange ymax]
-			set dy2min [dict get $datarange y2min]
-			set dy2max [dict get $datarange y2max]
-			set dzmin [dict get $datarange zmin]
-			set dzmax [dict get $datarange zmax]
-
-			# now compute range from request & data
-			set xwiden {min false max false}
-			set ywiden {min false max false}
-			set y2widen {min false max false}
-			set zwiden {min false max false}
-			lassign $options(-xrange) xmin xmax
-			lassign $options(-yrange) ymin ymax
-			lassign $options(-y2range) y2min y2max
-			lassign $options(-zrange) zmin zmax
-
-			if {$xmin =="*" || ($options(-logx) && !islogfinite($xmin))} {
-				set xmin $dxmin
-				dict set xwiden min true
-			}
-
-			if {$ymin =="*" || ($options(-logy) && !islogfinite($ymin))} {
-				set ymin $dymin
-				dict set ywiden min true
-			}
-
-			if {$y2min =="*" || ($options(-logy2) && !islogfinite($y2min))} {
-				set y2min $dy2min
-				dict set ywiden min true
-			}
-
-			if {$zmin =="*" || ($options(-logz) && !islogfinite($zmin))} {
-				set zmin $dzmin
-				dict set zwiden min true
-			}
-
-			if {$xmax =="*" || ($options(-logx) && !islogfinite($xmax))} {
-				set xmax $dxmax
-				dict set xwiden max true
-			}
-
-			if {$ymax =="*" || ($options(-logy) && !islogfinite($ymax))} {
-				set ymax $dymax
-				dict set ywiden max true
-			}
-
-			if {$y2max =="*" || ($options(-logy2) && !islogfinite($y2max))} {
-				set y2max $dy2max
-				dict set ywiden max true
-			}
-
-			if {$zmax =="*" || ($options(-logz) && !islogfinite($zmax))} {
-				set zmax $dzmax
-				dict set zwiden max true
-			}
-
 			# now, we could still have an unusable range in case the data
 			# doesn't provide us with a sensible range
 			lassign [sanitize_range $xmin $xmax] xmin xmax
@@ -1917,7 +1930,7 @@ namespace eval ukaz {
 				$options(-logx) $xwiden [formatcmd $options(-xformat)]] xticlist xmin xmax
 
 			lassign [compute_ticlist $y2min $y2max $options(-y2tics) \
-				$options(-logy2) $ywiden [formatcmd $options(-y2format)]] y2ticlist y2min y2max
+				$options(-logy2) $y2widen [formatcmd $options(-y2format)]] y2ticlist y2min y2max
 
 			lassign [compute_ticlist $ymin $ymax $options(-ytics) \
 				$options(-logy) $ywiden [formatcmd $options(-yformat)]] yticlist ymin ymax
@@ -2096,6 +2109,7 @@ namespace eval ukaz {
 			lassign [compute_rangetransform \
 					$ymin $ymax $dymin $dymax] ymul yadd
 			
+			set forcerecalc false
 			if {$options(-aspectsquare)} {
 				# make x and y use identical units
 				# useful for colormap plotting
@@ -2106,12 +2120,38 @@ namespace eval ukaz {
 					# fix ymul
 					set ymulnew [expr {sign($ymul)*abs($xmul)}]
 					set ycenter [expr {($ymin + $ymax)/2.0}]
+					set ydiff   [expr {($ymax - $ymin)/2.0}]
 					set yadd [expr {$yadd + $ymul*$ycenter - $ymulnew*$ycenter}]
+					if {$ymulnew != 0.0} {
+						set ymin [expr {$ycenter - $ydiff*$ymul/$ymulnew}]
+						set ymax [expr {$ycenter + $ydiff*$ymul/$ymulnew}]
+						if {$options(-logy)} {
+							set ymin [expr {exp($ymin)}]
+							set ymax [expr {exp($ymax)}]
+						}
+						puts "New yrange: $ymin $ymax"
+						dict set displayrange ymin $ymin
+						dict set displayrange ymax $ymax
+						set forcerecalc true
+					}
 					set ymul $ymulnew
 				} else {
 					set xmulnew [expr {sign($xmul)*abs($ymul)}]
 					set xcenter [expr {($xmin + $xmax)/2.0}]
+					set xdiff   [expr {($xmax - $xmin)/2.0}]
 					set xadd [expr {$xadd + $xmul*$xcenter - $xmulnew*$xcenter}]
+					if {$xmulnew != 0.0} {
+						set xmin [expr {$xcenter - $xdiff*$xmul/$xmulnew}]
+						set xmax [expr {$xcenter + $xdiff*$xmul/$xmulnew}]
+						if {$options(-logx)} {
+							set xmin [expr {exp($xmin)}]
+							set xmax [expr {exp($xmax)}]
+						}
+						puts "New xrange: $xmin $xmax"
+						dict set displayrange xmin $xmin
+						dict set displayrange xmax $xmax
+						set forcerecalc true
+					}
 					set xmul $xmulnew
 				}
 			}
@@ -2135,6 +2175,8 @@ namespace eval ukaz {
 					$zmin $zmax 0.0 1.0] zmul zadd
 
 			set transform [list $xmul $xadd $ymul $yadd $y2mul $y2add $zmul $zadd]
+			
+			return $forcerecalc
 		}
 
 		method graph2pix {coords {yaxis y}} {
@@ -2716,14 +2758,23 @@ namespace eval ukaz {
 		}
 
 		method Redraw {} {
-			# puts "Now drawing [$self configure]"
 			if {[dict size $plotdata] == 0} { return }
+			# calculate the geometry
 			$self calcranges
 			$self calcsize
-			$self calctransform
+			set recalc [$self calctransform]
+			if {$recalc} {
+				# perform one more iteration. This is in case
+				# that the geometry changes and the size reserved for the ticmarks
+				# must be adjusted
+				$self calcranges true
+				$self calcsize
+				$self calctransform
+			}
 
 			# strange effect: after everything is deleted from the canvas
 			# font metrics takes 100x longer due to caching
+			# therefore, delete *after* the geometry calculation
 			$hull delete $selfns
 			$self drawcoordsys
 			$self drawdata
