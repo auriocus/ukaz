@@ -1144,6 +1144,7 @@ namespace eval ukaz {
 		option -redraw -default 0 -readonly yes
 		option -displayrange -readonly yes -cgetmethod getdisplayrange
 		option -displaysize -readonly yes -cgetmethod getdisplaysize
+		option -drag -default zoomin
 
 		# backing store for plot data
 		variable plotdata {}
@@ -2853,6 +2854,32 @@ namespace eval ukaz {
 				event generate $win <<Zoom>> -data [concat $range]
 			}
 		}
+		
+		method autocontrast {range} {
+			# store current range in zoomstack
+			# apply zoom range
+			lassign $range xmin xmax ymin ymax y2min y2max
+			set zmin +Inf
+			set zmax -Inf
+			dict for {id data} $plotdata {
+				if {[dict get $data type raster] || [dict get $data varying] eq "color"} {
+					set xydata [dict get $data data]
+					set zdata [dict get $data zdata]
+					foreach {x y} $xydata z $zdata {
+						if {$x < $xmax && $x > $xmin && $y < $ymax && $y > $ymin} {
+							if {$zmin > $z} { set zmin $z }
+							if {$zmax < $z} { set zmax $z }
+						}
+					}
+				}
+			}
+			if {$zmax > $zmin} {
+				set options(-zrange) [list $zmin $zmax]
+			}
+			$self RedrawRequest
+			event generate $win <<Zoom>> -data $range
+		}
+
 
 		#### Methods for dragging rectangles (for zooming) #####
 		method {drag start} {x y} {
@@ -2911,7 +2938,7 @@ namespace eval ukaz {
 
 				if {$x0 != $x1 && $y0 != $y1} {
 					# zoom in!
-					$self zoomin [list $x0 $x1 $y0 $y1 $y20 $y21]
+					$self $options(-drag) [list $x0 $x1 $y0 $y1 $y20 $y21]
 				}
 			}
 			dict set dragdata dragging false
