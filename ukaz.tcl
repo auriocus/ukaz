@@ -417,7 +417,7 @@ namespace eval ukaz {
 			set oldy $y
 		}
 
-		puts "$dirchange direction changes found"
+		# puts "$dirchange direction changes found"
 		
 		if {$dirchange > $N/2} {
 			set dirchange [expr {$N - $dirchange}]
@@ -426,7 +426,7 @@ namespace eval ukaz {
 		set Nx [expr {$dirchange + 1}]
 		set Ny [expr {max($N/ $Nx, 1)}]
 		
-		puts "Assuming $Nx x $Ny raster"
+		# puts "Assuming $Nx x $Ny raster"
 
 		set xsize [expr {double($xmax - $xmin)/max($Nx-1,1)*$overprint}] 
 		set ysize [expr {double($ymax - $ymin)/max($Ny-1,1)*$overprint}]
@@ -1144,7 +1144,7 @@ namespace eval ukaz {
 		option -redraw -default 0 -readonly yes
 		option -displayrange -readonly yes -cgetmethod getdisplayrange
 		option -displaysize -readonly yes -cgetmethod getdisplaysize
-		option -drag -default zoomin
+		option -dragoperation -default zoom -configuremethod dragopset
 
 		# backing store for plot data
 		variable plotdata {}
@@ -1188,8 +1188,8 @@ namespace eval ukaz {
 			bind $win <ButtonPress-1> [mymethod drag start %x %y]
 			bind $win <Button1-Motion> [mymethod drag move %x %y]
 			bind $win <ButtonRelease-1> [mymethod drag end %x %y %s]
-			bind $win <ButtonRelease-2> [mymethod zoomout]
-			bind $win <ButtonRelease-3> [mymethod zoomout]
+			bind $win <ButtonRelease-2> [mymethod rightclick]
+			bind $win <ButtonRelease-3> [mymethod rightclick]
 			bind $win <Motion> [mymethod motionevent %x %y]
 
 		}
@@ -2832,7 +2832,26 @@ namespace eval ukaz {
 				return -code error "Range limits must be either a float or *"
 			}
 		}
-
+		
+		variable ondragend zoomin
+		variable onrightclick zoomout
+		method dragopset {option value} {
+			switch $value {
+				zoom {
+					set ondragend zoomin
+					set onrightclick zoomout
+				}
+				contrast {
+					set ondragend autocontrast
+					set onrightclick autocontrastout
+				}
+				default {
+					return -code error "Possible drag operations: zoom, contrast"
+				}
+			}
+			set options($option) $value
+		}
+		
 		method zoomin {range} {
 			# store current range in zoomstack
 			lappend zoomstack [list $options(-xrange) $options(-yrange) $options(-y2range)]
@@ -2862,7 +2881,7 @@ namespace eval ukaz {
 			set zmin +Inf
 			set zmax -Inf
 			dict for {id data} $plotdata {
-				if {[dict get $data type raster] || [dict get $data varying] eq "color"} {
+				if {[dict exists $data type raster] || [dict get $data varying] eq "color"} {
 					set xydata [dict get $data data]
 					set zdata [dict get $data zdata]
 					foreach {x y} $xydata z $zdata {
@@ -2879,7 +2898,11 @@ namespace eval ukaz {
 			$self RedrawRequest
 			event generate $win <<Zoom>> -data $range
 		}
-
+		
+		method autocontrastout {} {
+			set options(-zrange) {* *}
+			$self RedrawRequest
+		}
 
 		#### Methods for dragging rectangles (for zooming) #####
 		method {drag start} {x y} {
@@ -2938,7 +2961,7 @@ namespace eval ukaz {
 
 				if {$x0 != $x1 && $y0 != $y1} {
 					# zoom in!
-					$self $options(-drag) [list $x0 $x1 $y0 $y1 $y20 $y21]
+					$self $ondragend [list $x0 $x1 $y0 $y1 $y20 $y21]
 				}
 			}
 			dict set dragdata dragging false
@@ -2950,6 +2973,10 @@ namespace eval ukaz {
 			set xgraph [$self pixToX $x]
 			set ygraph [$self pixToY $y]
 			event generate $win <<MotionEvent>> -x $x -y $y -data [list $xgraph $ygraph]
+		}
+
+		method rightclick {} {
+			$self $onrightclick
 		}
 
 		method pickpoint {x y {maxdist 5}} {
