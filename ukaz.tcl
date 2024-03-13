@@ -2724,7 +2724,7 @@ namespace eval ukaz {
 				for {set znorm 0} {$znorm < $dymin - $dymax} {incr znorm} {
 					set frac [expr {1.0 - double($znorm) / ($dymin - $dymax)}]
 					set y [expr {int($znorm + $dymax)}]
-					$hull create rectangle $cbxpos $y $cbx2pos $y -outline {} -fill [getcolor $map $frac] -tag $selfns
+					$hull create rectangle $cbxpos $y $cbx2pos [expr {$y+1}] -outline {} -fill [getcolor $map $frac] -tag $selfns
 				}
 
 				# rectangle containing colorbar
