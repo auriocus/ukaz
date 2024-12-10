@@ -1,5 +1,5 @@
 package require snit
-package require Tk 8.6
+package require Tk 8.6-
 package provide ukaz 2.1
 
 namespace eval ukaz {
